@@ -4,6 +4,7 @@
  * Pruebas unitarias para la tabla de símbolos (Environment),
  * asignación de variables en RPN, ámbitos locales (Scoping)
  * y sombreado de variables (Shadowing) con 'begin' y 'end'.
+ * Desarrollado con fines académicos por Brayan Ceballos y Andrés Crespo.
  */
 
 import { describe, it } from 'node:test';
@@ -20,8 +21,8 @@ describe('Variables y Asignación en RPN', () => {
 
     const res = evaluateLine('x 10 =', stack, env);
     assert.equal(res.ok, true);
-    assert.equal(env.has('x'), true);
-    assert.deepEqual(env.lookup('x'), { kind: 'number', value: 10 });
+    assert.equal(env.hasVariable('x'), true);
+    assert.deepEqual(env.lookupVariable('x'), { kind: 'number', value: 10 });
   });
 
   it('debe evaluar una expresión compuesta y asignarla a una variable (x 5 2 + =)', () => {
@@ -30,7 +31,7 @@ describe('Variables y Asignación en RPN', () => {
 
     const res = evaluateLine('x 5 2 + =', stack, env);
     assert.equal(res.ok, true);
-    assert.deepEqual(env.lookup('x'), { kind: 'number', value: 7 });
+    assert.deepEqual(env.lookupVariable('x'), { kind: 'number', value: 7 });
   });
 
   it('debe evaluar expresiones aritméticas usando variables (x 5 + 2 *)', () => {
@@ -53,9 +54,8 @@ describe('Variables y Asignación en RPN', () => {
 
     const res = evaluateLine('no_existe 5 +', stack, env);
     assert.equal(res.ok, false);
-    if (!res.ok) {
-      assert.equal(res.error.kind, 'UNDEFINED_VARIABLE');
-    }
+    if (!resultNotOk(res)) return;
+    assert.equal(res.error.kind, 'UNDEFINED_VARIABLE');
   });
 
   it('debe fallar si el destino de asignación no es un identificador (10 20 =)', () => {
@@ -64,9 +64,8 @@ describe('Variables y Asignación en RPN', () => {
 
     const res = evaluateLine('10 20 =', stack, env);
     assert.equal(res.ok, false);
-    if (!res.ok) {
-      assert.equal(res.error.kind, 'INVALID_ASSIGNMENT');
-    }
+    if (!resultNotOk(res)) return;
+    assert.equal(res.error.kind, 'INVALID_ASSIGNMENT');
   });
 });
 
@@ -92,62 +91,61 @@ describe('Ámbitos Locales (Scoping) y Sombreado (Shadowing)', () => {
     assert.equal(env.depth, 0);
   });
 
-  it('debe implementar Shadowing sin alterar la variable global al salir del bloque', () => {
+  it('debe implementar Shadowing sin alterar la variable global x al salir del bloque', () => {
     const stack = new Stack<StackElement>();
     let env = new Environment();
 
     // 1. Declarar x = 10 en global
     evaluateLine('x 10 =', stack, env);
-    assert.deepEqual(env.lookup('x'), { kind: 'number', value: 10 });
+    assert.deepEqual(env.lookupVariable('x'), { kind: 'number', value: 10 });
 
-    // 2. Abrir bloque local
-    const bRes = evaluateLine('begin', stack, env);
-    if (bRes.ok) env = bRes.value.env;
+    // 2. Abrir ámbito local con begin
+    const beginRes = evaluateLine('begin', stack, env);
+    if (beginRes.ok) env = beginRes.value.env;
 
-    // 3. Modificar x en el ámbito local a 99
+    // 3. Sombreado: x = 99 y z = 500 en ámbito local
     evaluateLine('x 99 =', stack, env);
-    assert.deepEqual(env.lookup('x'), { kind: 'number', value: 99 });
-
-    // 4. Declarar variable local z = 500
     evaluateLine('z 500 =', stack, env);
-    assert.deepEqual(env.lookup('z'), { kind: 'number', value: 500 });
+    assert.deepEqual(env.lookupVariable('x'), { kind: 'number', value: 99 });
+    assert.deepEqual(env.lookupVariable('z'), { kind: 'number', value: 500 });
 
-    // 5. Cerrar bloque local
-    const eRes = evaluateLine('end', stack, env);
-    if (eRes.ok) env = eRes.value.env;
+    // 4. Cerrar ámbito local con end
+    const endRes = evaluateLine('end', stack, env);
+    if (endRes.ok) env = endRes.value.env;
 
-    // 6. Verificar que la global x sigue intacta con 10 y z ya no existe
-    assert.deepEqual(env.lookup('x'), { kind: 'number', value: 10 });
-    assert.equal(env.has('z'), false);
+    // 5. x retoma su valor global (10) y z ya no existe
+    assert.deepEqual(env.lookupVariable('x'), { kind: 'number', value: 10 });
+    assert.equal(env.lookupVariable('z'), undefined);
   });
 
-  it('debe soportar múltiples niveles anidados de begin/end', () => {
+  it('debe soportar múltiples niveles anidados de begin/end con shadowing de x', () => {
     const stack = new Stack<StackElement>();
     let env = new Environment();
 
-    evaluateLine('x 1 =', stack, env);
+    // Nivel 0 (Global)
+    evaluateLine('x 100 =', stack, env);
 
     // Nivel 1
-    let res = evaluateLine('begin', stack, env);
-    if (res.ok) env = res.value.env;
-    evaluateLine('x 2 =', stack, env);
-    assert.deepEqual(env.lookup('x'), { kind: 'number', value: 2 });
+    let r1 = evaluateLine('begin', stack, env);
+    if (r1.ok) env = r1.value.env;
+    evaluateLine('x 200 =', stack, env);
+    assert.deepEqual(env.lookupVariable('x'), { kind: 'number', value: 200 });
 
     // Nivel 2
-    res = evaluateLine('begin', stack, env);
-    if (res.ok) env = res.value.env;
-    evaluateLine('x 3 =', stack, env);
-    assert.deepEqual(env.lookup('x'), { kind: 'number', value: 3 });
+    let r2 = evaluateLine('begin', stack, env);
+    if (r2.ok) env = r2.value.env;
+    evaluateLine('x 300 =', stack, env);
+    assert.deepEqual(env.lookupVariable('x'), { kind: 'number', value: 300 });
 
-    // Salir de Nivel 2
-    res = evaluateLine('end', stack, env);
-    if (res.ok) env = res.value.env;
-    assert.deepEqual(env.lookup('x'), { kind: 'number', value: 2 });
+    // Salir de Nivel 2 -> Nivel 1
+    let c2 = evaluateLine('end', stack, env);
+    if (c2.ok) env = c2.value.env;
+    assert.deepEqual(env.lookupVariable('x'), { kind: 'number', value: 200 });
 
-    // Salir de Nivel 1
-    res = evaluateLine('end', stack, env);
-    if (res.ok) env = res.value.env;
-    assert.deepEqual(env.lookup('x'), { kind: 'number', value: 1 });
+    // Salir de Nivel 1 -> Nivel 0
+    let c1 = evaluateLine('end', stack, env);
+    if (c1.ok) env = c1.value.env;
+    assert.deepEqual(env.lookupVariable('x'), { kind: 'number', value: 100 });
   });
 
   it('debe emitir error SCOPE_ERROR si se ejecuta end en el ámbito global', () => {
@@ -156,25 +154,28 @@ describe('Ámbitos Locales (Scoping) y Sombreado (Shadowing)', () => {
 
     const res = evaluateLine('end', stack, env);
     assert.equal(res.ok, false);
-    if (!res.ok) {
-      assert.equal(res.error.kind, 'SCOPE_ERROR');
-    }
+    if (!resultNotOk(res)) return;
+    assert.equal(res.error.kind, 'SCOPE_ERROR');
   });
 
   it('el comando vars debe listar variables activas y sus niveles de scope', () => {
     const stack = new Stack<StackElement>();
     let env = new Environment();
 
-    evaluateLine('a 10 =', stack, env);
-    const bRes = evaluateLine('begin', stack, env);
-    if (bRes.ok) env = bRes.value.env;
-    evaluateLine('b 20 =', stack, env);
+    evaluateLine('x 10 =', stack, env);
+    let rScope = evaluateLine('begin', stack, env);
+    if (rScope.ok) env = rScope.value.env;
+    evaluateLine('y 20 =', stack, env);
 
-    const vars = env.getActiveVariables();
-    assert.equal(vars.length, 2);
-    assert.equal(vars[0].name, 'a');
-    assert.equal(vars[0].scopeDepth, 0);
-    assert.equal(vars[1].name, 'b');
-    assert.equal(vars[1].scopeDepth, 1);
+    const varsRes = evaluateLine('vars', stack, env);
+    assert.equal(varsRes.ok, true);
+    if (varsRes.ok) {
+      assert.match(varsRes.value.message ?? '', /x = 10 \(number, global \[0\]\)/);
+      assert.match(varsRes.value.message ?? '', /y = 20 \(number, local \[1\]\)/);
+    }
   });
 });
+
+function resultNotOk<T, E>(result: { ok: true; value: T } | { ok: false; error: E }): result is { ok: false; error: E } {
+  return !result.ok;
+}

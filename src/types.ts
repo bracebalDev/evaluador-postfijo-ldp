@@ -17,10 +17,16 @@ export type AssignmentOp = '=';
 export type Operator = ArithmeticOp | ComparisonOp | BooleanOp | AssignmentOp;
 
 // --- Comandos Especiales del REPL / Evaluador ---
+// Incluye comandos del proyecto (begin, end, vars) y variantes mnemotécnicas
+// de alto nivel (scope, endscope, env, symbols) para máxima expresividad.
 export type Command =
   | 'begin'
   | 'end'
+  | 'scope'
+  | 'endscope'
   | 'vars'
+  | 'env'
+  | 'symbols'
   | 'stack'
   | 'clear'
   | 'help'
@@ -39,9 +45,9 @@ export interface BooleanValue {
 }
 
 /**
- * Representa una referencia simbólica a un identificador en la pila.
- * Permite sintaxis de asignación postfija directa como: `x 10 =` o `x 5 2 + =`.
- * Si se utiliza en una operación que requiere evaluación, se resuelve en el entorno.
+ * Representa una referencia simbólica a un identificador mnemotécnico en la pila.
+ * Permite sintaxis de asignación postfija directa como: `base 10 =` o `subtotal 5 2 + =`.
+ * Si se utiliza en una operación que requiere evaluación, se resuelve en el entorno léxico.
  */
 export interface VariableRef {
   readonly kind: 'ref';
@@ -111,7 +117,7 @@ export function err<E>(error: E): Result<never, E> {
   return { ok: false, error };
 }
 
-// --- Metadatos de Variables para el Comando 'vars' ---
+// --- Metadatos de Variables para el Comando 'vars' / 'env' ---
 export interface VariableInfo {
   readonly name: string;
   readonly value: RuntimeValue;

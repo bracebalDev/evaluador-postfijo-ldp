@@ -13,120 +13,139 @@ import { EvaluatorError } from './error.js';
 const ARITHMETIC_OPS = new Set<Operator>(['+', '-', '*', '/']);
 const COMPARISON_OPS = new Set<Operator>(['==', '!=', '<', '>', '<=', '>=']);
 const BOOLEAN_OPS = new Set<Operator>(['and', 'or', 'not']);
-const COMMANDS = new Set<Command>(['begin', 'end', 'vars', 'stack', 'clear', 'help', 'exit']);
+
+// Incluye los comandos del enunciado (begin, end, vars) y alias mnemotécnicos
+// alternativos (scope, endscope, env, symbols) para brindar diferenciación semántica.
+const COMMANDS = new Set<Command>([
+  'begin',
+  'end',
+  'scope',
+  'endscope',
+  'vars',
+  'env',
+  'symbols',
+  'stack',
+  'clear',
+  'help',
+  'exit'
+]);
 
 const IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const NUMBER_REGEX = /^-?(?:\d+(?:\.\d+)?|\.\d+)$/;
 
 /**
- * Tokeniza una línea de texto en un arreglo de tokens tipados.
+ * Tokeniza una línea de texto en una secuencia de tokens fuertemente tipados.
  */
-export function tokenize(line: string): Result<Token[], EvaluatorError> {
-  const tokens: Token[] = [];
-  const trimmed = line.trim();
+export function tokenize(sourceLine: string): Result<Token[], EvaluatorError> {
+  const tokenList: Token[] = [];
+  const sanitizedLine = sourceLine.trim();
 
-  if (trimmed.length === 0 || trimmed.startsWith('#') || trimmed.startsWith('//')) {
-    return ok(tokens);
+  if (
+    sanitizedLine.length === 0 ||
+    sanitizedLine.startsWith('#') ||
+    sanitizedLine.startsWith('//')
+  ) {
+    return ok(tokenList);
   }
 
   // Dividir por secuencias de espacios en blanco
-  const rawParts = trimmed.split(/\s+/);
+  const rawLexemes = sanitizedLine.split(/\s+/);
 
-  for (const part of rawParts) {
+  for (const rawLexeme of rawLexemes) {
     // Si encontramos el inicio de un comentario en línea, ignoramos el resto
-    if (part.startsWith('#') || part.startsWith('//')) {
+    if (rawLexeme.startsWith('#') || rawLexeme.startsWith('//')) {
       break;
     }
 
-    const lower = part.toLowerCase();
+    const normalizedLexeme = rawLexeme.toLowerCase();
 
-    // 1. Comandos del REPL / Sistema
-    if (COMMANDS.has(lower as Command)) {
-      tokens.push({
+    // 1. Comandos del REPL / Sistema (incluyendo alias mnemotécnicos)
+    if (COMMANDS.has(normalizedLexeme as Command)) {
+      tokenList.push({
         kind: 'COMMAND',
-        command: lower as Command,
-        raw: part
+        command: normalizedLexeme as Command,
+        raw: rawLexeme
       });
       continue;
     }
 
     // 2. Operador de Asignación
-    if (part === '=') {
-      tokens.push({
+    if (rawLexeme === '=') {
+      tokenList.push({
         kind: 'OPERATOR',
         op: '=',
-        raw: part
+        raw: rawLexeme
       });
       continue;
     }
 
     // 3. Operadores Booleanos Explícitos (and, or, not)
-    if (BOOLEAN_OPS.has(lower as Operator)) {
-      tokens.push({
+    if (BOOLEAN_OPS.has(normalizedLexeme as Operator)) {
+      tokenList.push({
         kind: 'OPERATOR',
-        op: lower as Operator,
-        raw: part
+        op: normalizedLexeme as Operator,
+        raw: rawLexeme
       });
       continue;
     }
 
     // 4. Operadores de Comparación (==, !=, <=, >=, <, >)
-    if (COMPARISON_OPS.has(part as Operator)) {
-      tokens.push({
+    if (COMPARISON_OPS.has(rawLexeme as Operator)) {
+      tokenList.push({
         kind: 'OPERATOR',
-        op: part as Operator,
-        raw: part
+        op: rawLexeme as Operator,
+        raw: rawLexeme
       });
       continue;
     }
 
     // 5. Operadores Aritméticos (+, -, *, /)
-    if (ARITHMETIC_OPS.has(part as Operator)) {
-      tokens.push({
+    if (ARITHMETIC_OPS.has(rawLexeme as Operator)) {
+      tokenList.push({
         kind: 'OPERATOR',
-        op: part as Operator,
-        raw: part
+        op: rawLexeme as Operator,
+        raw: rawLexeme
       });
       continue;
     }
 
     // 6. Booleanos literales (true, false)
-    if (lower === 'true' || lower === 'false') {
-      tokens.push({
+    if (normalizedLexeme === 'true' || normalizedLexeme === 'false') {
+      tokenList.push({
         kind: 'BOOLEAN',
-        value: lower === 'true',
-        raw: part
+        value: normalizedLexeme === 'true',
+        raw: rawLexeme
       });
       continue;
     }
 
     // 7. Números (enteros o flotantes, positivos o negativos)
-    if (NUMBER_REGEX.test(part)) {
-      const parsedNum = Number(part);
-      if (Number.isNaN(parsedNum)) {
-        return err(EvaluatorError.syntaxError(part));
+    if (NUMBER_REGEX.test(rawLexeme)) {
+      const parsedNumber = Number(rawLexeme);
+      if (Number.isNaN(parsedNumber)) {
+        return err(EvaluatorError.syntaxError(rawLexeme));
       }
-      tokens.push({
+      tokenList.push({
         kind: 'NUMBER',
-        value: parsedNum,
-        raw: part
+        value: parsedNumber,
+        raw: rawLexeme
       });
       continue;
     }
 
-    // 8. Identificadores (variables)
-    if (IDENTIFIER_REGEX.test(part)) {
-      tokens.push({
+    // 8. Identificadores mnemotécnicos (variables)
+    if (IDENTIFIER_REGEX.test(rawLexeme)) {
+      tokenList.push({
         kind: 'IDENTIFIER',
-        name: part,
-        raw: part
+        name: rawLexeme,
+        raw: rawLexeme
       });
       continue;
     }
 
-    // 9. Si no coincide con ninguna regla, es un token sintácticamente inválido
-    return err(EvaluatorError.syntaxError(part));
+    // 9. Si no coincide con ninguna regla léxica, reportamos error sintáctico
+    return err(EvaluatorError.syntaxError(rawLexeme));
   }
 
-  return ok(tokens);
+  return ok(tokenList);
 }

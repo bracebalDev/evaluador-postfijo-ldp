@@ -1,6 +1,6 @@
 # ====================================================================
 # Demostración del Evaluador Postfijo (RPN) en TypeScript
-# Asignación #1 - Lenguajes de Programación (FACYT - UC 1-2026)
+# Desarrollado con fines académicos por Brayan Ceballos y Andrés Crespo
 # ====================================================================
 
 # 1. Operaciones Aritméticas Básicas en RPN
@@ -9,14 +9,16 @@
 6 7 *
 40 8 /
 
-# 2. Asignación y Uso de Variables
+# 2. Asignación y Uso de Variables (Identificadores del Proyecto)
 x 10 =
 y 20 =
 vars
 x y +
+
+# Expresión compuesta: (x + 5) * 2
 x 5 + 2 *
 
-# 3. Expresiones de Asignación Compuestas (ej. x 5 2 + =)
+# 3. Asignación con Expresión Postfija Compuesta (ej. x 5 2 + =)
 total 5 2 + =
 vars
 total
@@ -37,25 +39,30 @@ false not
 10 5 > 20 15 > and
 
 # 6. Ámbitos Locales (Scoping) y Sombreado de Variables (Shadowing)
-# Verificamos valor global de x
+# Valor global de x
+x 10 =
 x
-# Abrimos un nuevo ámbito local
+
+# Abrimos un nuevo ámbito local temporal con 'begin'
 begin
 vars
-# Asignamos x en el ámbito local (Shadowing)
+# Sombreado (Shadowing): redefinimos x dentro del ámbito local
 x 99 =
 z 500 =
 vars
 x
+
 # Abrimos un segundo ámbito anidado
 begin
 x 777 =
 vars
 x
 end
+
 # Al salir del segundo ámbito, x vuelve a 99
 x
 end
+
 # Al salir del bloque local, x retoma su valor global (10) y z ya no existe
 x
 vars
@@ -63,14 +70,18 @@ vars
 # 7. Manejo de Errores Controlados (El programa no aborta)
 # Error de tipos: suma de número con booleano
 5 true +
+
 # Error aritmético: división por cero
 10 0 /
+
 # Error de pila: stack underflow (limpiamos pila y solicitamos suma binaria)
 clear
 +
+
 # Error de variable no definida
 variable_inexistente 5 +
-# Error de ámbito: end sin begin activo
+
+# Error de ámbito: end sin bloque activo
 end
 
 # 8. Estado final de la pila y variables

@@ -4,6 +4,10 @@
  * Interfaz interactiva de consola (REPL) para el evaluador postfijo en TypeScript.
  * Incorpora formato con códigos de escape ANSI, indicador visual de profundidad
  * de ámbito léxico, visualización del tope de pila e historial de comandos.
+ *
+ * Desarrollado con fines académicos por:
+ *  - Brayan Ceballos
+ *  - Andrés Crespo
  */
 
 import * as readline from 'node:readline';
@@ -36,7 +40,8 @@ function formatValue(val: RuntimeValue): string {
 export function printBanner(): void {
   console.log(`${ANSI.cyan}${ANSI.bold}================================================================${ANSI.reset}`);
   console.log(`${ANSI.magenta}${ANSI.bold}   Evaluador Postfijo (Mini-REPL en RPN) - TypeScript${ANSI.reset}`);
-  console.log(`${ANSI.dim}   Asignación #1 - Lenguajes de Programación (FACYT - UC 1-2026)${ANSI.reset}`);
+  console.log(`${ANSI.dim}   Asignación #1 - Lenguajes de Programación (CAO604) | FACYT - UC${ANSI.reset}`);
+  console.log(`${ANSI.dim}   Desarrollado con fines académicos por: Brayan Ceballos y Andrés Crespo${ANSI.reset}`);
   console.log(`${ANSI.cyan}${ANSI.bold}================================================================${ANSI.reset}`);
   console.log(`Escriba expresiones en Notación Polaca Inversa (ej. ${ANSI.green}x 10 =${ANSI.reset}, ${ANSI.green}x 5 + 2 *${ANSI.reset})`);
   console.log(`Comandos útiles: ${ANSI.yellow}vars${ANSI.reset}, ${ANSI.yellow}stack${ANSI.reset}, ${ANSI.yellow}begin${ANSI.reset}, ${ANSI.yellow}end${ANSI.reset}, ${ANSI.yellow}clear${ANSI.reset}, ${ANSI.yellow}help${ANSI.reset}, ${ANSI.yellow}exit${ANSI.reset}\n`);

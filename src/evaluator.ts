@@ -8,8 +8,8 @@
  *  - Manejo funcional de errores mediante el tipo Result<T, E>.
  *  - Operaciones aritméticas (+, -, *, /), comparaciones (==, !=, <, >, <=, >=)
  *    y booleanas explícitas (and, or, not).
- *  - Asignación de variables (x 10 =, x 5 2 + =) y resolución léxica.
- *  - Comandos de control de ámbito (begin, end) y visualización (vars, stack, clear).
+ *  - Asignación de variables mnemotécnicas (base 10 =, subtotal 5 2 + =) y resolución léxica.
+ *  - Comandos de control de ámbito (begin/scope, end/endscope) y visualización (vars/env, stack, clear).
  */
 
 import type {
@@ -41,77 +41,80 @@ export interface EvaluationResult {
  * Si es un NumberValue o BooleanValue, lo retorna directamente.
  * Si es un VariableRef, busca su definición en el entorno léxico (Environment).
  */
-export function resolveValue(
-  element: StackElement,
-  env: Environment
+export function resolveStackElementValue(
+  stackElement: StackElement,
+  symbolEnvironment: Environment
 ): Result<RuntimeValue, EvaluatorError> {
-  if (element.kind === 'number' || element.kind === 'boolean') {
-    return ok(element);
+  if (stackElement.kind === 'number' || stackElement.kind === 'boolean') {
+    return ok(stackElement);
   }
 
-  // element.kind === 'ref'
-  const found = env.lookup(element.name);
-  if (found === undefined) {
-    return err(EvaluatorError.undefinedVariable(element.name));
+  // stackElement.kind === 'ref'
+  const resolvedBinding = symbolEnvironment.lookupVariable(stackElement.name);
+  if (resolvedBinding === undefined) {
+    return err(EvaluatorError.undefinedVariable(stackElement.name));
   }
-  return ok(found);
+  return ok(resolvedBinding);
 }
+
+// Alias para compatibilidad hacia atrás
+export const resolveValue = resolveStackElementValue;
 
 /**
  * Ejecuta una operación aritmética binaria (+, -, *, /).
  * Extrae dos operandos de la pila, verifica que ambos sean numéricos
  * y apila el resultado numérico correspondiente.
  */
-function executeArithmetic(
-  op: ArithmeticOp,
-  stack: Stack<StackElement>,
-  env: Environment
+function evaluateArithmeticOperation(
+  operator: ArithmeticOp,
+  evaluationStack: Stack<StackElement>,
+  symbolEnvironment: Environment
 ): Result<void, EvaluatorError> {
-  if (stack.size() < 2) {
-    return err(EvaluatorError.stackUnderflow(op, 2, stack.size()));
+  if (evaluationStack.size() < 2) {
+    return err(EvaluatorError.stackUnderflow(operator, 2, evaluationStack.size()));
   }
 
-  const rightElem = stack.pop()!;
-  const leftElem = stack.pop()!;
+  const rightOperandElement = evaluationStack.pop()!;
+  const leftOperandElement = evaluationStack.pop()!;
 
-  const rightRes = resolveValue(rightElem, env);
-  if (!rightRes.ok) return rightRes;
+  const rightResolutionResult = resolveStackElementValue(rightOperandElement, symbolEnvironment);
+  if (!rightResolutionResult.ok) return rightResolutionResult;
 
-  const leftRes = resolveValue(leftElem, env);
-  if (!leftRes.ok) return leftRes;
+  const leftResolutionResult = resolveStackElementValue(leftOperandElement, symbolEnvironment);
+  if (!leftResolutionResult.ok) return leftResolutionResult;
 
-  const right = rightRes.value;
-  const left = leftRes.value;
+  const rightRuntimeValue = rightResolutionResult.value;
+  const leftRuntimeValue = leftResolutionResult.value;
 
   // Chequeo dinámico de tipos estricto
-  if (left.kind !== 'number') {
-    return err(EvaluatorError.typeMismatch(op, 'number', left.kind));
+  if (leftRuntimeValue.kind !== 'number') {
+    return err(EvaluatorError.typeMismatch(operator, 'number', leftRuntimeValue.kind));
   }
-  if (right.kind !== 'number') {
-    return err(EvaluatorError.typeMismatch(op, 'number', right.kind));
+  if (rightRuntimeValue.kind !== 'number') {
+    return err(EvaluatorError.typeMismatch(operator, 'number', rightRuntimeValue.kind));
   }
 
-  let resultNum: number;
-  switch (op) {
+  let calculatedNumber: number;
+  switch (operator) {
     case '+':
-      resultNum = left.value + right.value;
+      calculatedNumber = leftRuntimeValue.value + rightRuntimeValue.value;
       break;
     case '-':
-      resultNum = left.value - right.value;
+      calculatedNumber = leftRuntimeValue.value - rightRuntimeValue.value;
       break;
     case '*':
-      resultNum = left.value * right.value;
+      calculatedNumber = leftRuntimeValue.value * rightRuntimeValue.value;
       break;
     case '/':
-      if (right.value === 0) {
+      if (rightRuntimeValue.value === 0) {
         return err(EvaluatorError.divisionByZero());
       }
-      resultNum = left.value / right.value;
+      calculatedNumber = leftRuntimeValue.value / rightRuntimeValue.value;
       break;
   }
 
-  const resValue: NumberValue = { kind: 'number', value: resultNum };
-  stack.push(resValue);
+  const computedValue: NumberValue = { kind: 'number', value: calculatedNumber };
+  evaluationStack.push(computedValue);
   return ok(undefined);
 }
 
@@ -120,203 +123,209 @@ function executeArithmetic(
  * Para <, >, <=, >= requiere que ambos operandos sean numéricos.
  * Para == y != permite comparar valores del mismo tipo.
  */
-function executeComparison(
-  op: ComparisonOp,
-  stack: Stack<StackElement>,
-  env: Environment
+function evaluateComparisonOperation(
+  operator: ComparisonOp,
+  evaluationStack: Stack<StackElement>,
+  symbolEnvironment: Environment
 ): Result<void, EvaluatorError> {
-  if (stack.size() < 2) {
-    return err(EvaluatorError.stackUnderflow(op, 2, stack.size()));
+  if (evaluationStack.size() < 2) {
+    return err(EvaluatorError.stackUnderflow(operator, 2, evaluationStack.size()));
   }
 
-  const rightElem = stack.pop()!;
-  const leftElem = stack.pop()!;
+  const rightOperandElement = evaluationStack.pop()!;
+  const leftOperandElement = evaluationStack.pop()!;
 
-  const rightRes = resolveValue(rightElem, env);
-  if (!rightRes.ok) return rightRes;
+  const rightResolutionResult = resolveStackElementValue(rightOperandElement, symbolEnvironment);
+  if (!rightResolutionResult.ok) return rightResolutionResult;
 
-  const leftRes = resolveValue(leftElem, env);
-  if (!leftRes.ok) return leftRes;
+  const leftResolutionResult = resolveStackElementValue(leftOperandElement, symbolEnvironment);
+  if (!leftResolutionResult.ok) return leftResolutionResult;
 
-  const right = rightRes.value;
-  const left = leftRes.value;
+  const rightRuntimeValue = rightResolutionResult.value;
+  const leftRuntimeValue = leftResolutionResult.value;
 
-  let boolResult: boolean;
+  let evaluatedBoolean: boolean;
 
-  if (op === '==' || op === '!=') {
+  if (operator === '==' || operator === '!=') {
     // Si los tipos no coinciden, reportamos error de tipo para reforzar chequeo estricto
-    if (left.kind !== right.kind) {
+    if (leftRuntimeValue.kind !== rightRuntimeValue.kind) {
       return err(
         EvaluatorError.typeMismatch(
-          op,
-          `mismo tipo (${left.kind})`,
-          `tipo incompatible (${right.kind})`
+          operator,
+          `mismo tipo (${leftRuntimeValue.kind})`,
+          `tipo incompatible (${rightRuntimeValue.kind})`
         )
       );
     }
-    const isEqual = left.value === right.value;
-    boolResult = op === '==' ? isEqual : !isEqual;
+    const areValuesEqual = leftRuntimeValue.value === rightRuntimeValue.value;
+    evaluatedBoolean = operator === '==' ? areValuesEqual : !areValuesEqual;
   } else {
     // Relacionales: <, >, <=, >=
-    if (left.kind !== 'number') {
-      return err(EvaluatorError.typeMismatch(op, 'number', left.kind));
+    if (leftRuntimeValue.kind !== 'number') {
+      return err(EvaluatorError.typeMismatch(operator, 'number', leftRuntimeValue.kind));
     }
-    if (right.kind !== 'number') {
-      return err(EvaluatorError.typeMismatch(op, 'number', right.kind));
+    if (rightRuntimeValue.kind !== 'number') {
+      return err(EvaluatorError.typeMismatch(operator, 'number', rightRuntimeValue.kind));
     }
 
-    switch (op) {
+    switch (operator) {
       case '<':
-        boolResult = left.value < right.value;
+        evaluatedBoolean = leftRuntimeValue.value < rightRuntimeValue.value;
         break;
       case '>':
-        boolResult = left.value > right.value;
+        evaluatedBoolean = leftRuntimeValue.value > rightRuntimeValue.value;
         break;
       case '<=':
-        boolResult = left.value <= right.value;
+        evaluatedBoolean = leftRuntimeValue.value <= rightRuntimeValue.value;
         break;
       case '>=':
-        boolResult = left.value >= right.value;
+        evaluatedBoolean = leftRuntimeValue.value >= rightRuntimeValue.value;
         break;
     }
   }
 
-  const resValue: BooleanValue = { kind: 'boolean', value: boolResult };
-  stack.push(resValue);
+  const computedValue: BooleanValue = { kind: 'boolean', value: evaluatedBoolean };
+  evaluationStack.push(computedValue);
   return ok(undefined);
 }
 
 /**
  * Ejecuta operaciones booleanas explícitas (and, or, not).
  */
-function executeBoolean(
-  op: BooleanOp,
-  stack: Stack<StackElement>,
-  env: Environment
+function evaluateBooleanOperation(
+  operator: BooleanOp,
+  evaluationStack: Stack<StackElement>,
+  symbolEnvironment: Environment
 ): Result<void, EvaluatorError> {
-  if (op === 'not') {
-    if (stack.size() < 1) {
-      return err(EvaluatorError.stackUnderflow(op, 1, stack.size()));
+  if (operator === 'not') {
+    if (evaluationStack.size() < 1) {
+      return err(EvaluatorError.stackUnderflow(operator, 1, evaluationStack.size()));
     }
-    const elem = stack.pop()!;
-    const res = resolveValue(elem, env);
-    if (!res.ok) return res;
+    const operandElement = evaluationStack.pop()!;
+    const resolutionResult = resolveStackElementValue(operandElement, symbolEnvironment);
+    if (!resolutionResult.ok) return resolutionResult;
 
-    if (res.value.kind !== 'boolean') {
-      return err(EvaluatorError.typeMismatch(op, 'boolean', res.value.kind));
+    if (resolutionResult.value.kind !== 'boolean') {
+      return err(EvaluatorError.typeMismatch(operator, 'boolean', resolutionResult.value.kind));
     }
 
-    const value: BooleanValue = { kind: 'boolean', value: !res.value.value };
-    stack.push(value);
+    const negatedValue: BooleanValue = { kind: 'boolean', value: !resolutionResult.value.value };
+    evaluationStack.push(negatedValue);
     return ok(undefined);
   }
 
   // and, or (binarios)
-  if (stack.size() < 2) {
-    return err(EvaluatorError.stackUnderflow(op, 2, stack.size()));
+  if (evaluationStack.size() < 2) {
+    return err(EvaluatorError.stackUnderflow(operator, 2, evaluationStack.size()));
   }
 
-  const rightElem = stack.pop()!;
-  const leftElem = stack.pop()!;
+  const rightOperandElement = evaluationStack.pop()!;
+  const leftOperandElement = evaluationStack.pop()!;
 
-  const rightRes = resolveValue(rightElem, env);
-  if (!rightRes.ok) return rightRes;
+  const rightResolutionResult = resolveStackElementValue(rightOperandElement, symbolEnvironment);
+  if (!rightResolutionResult.ok) return rightResolutionResult;
 
-  const leftRes = resolveValue(leftElem, env);
-  if (!leftRes.ok) return leftRes;
+  const leftResolutionResult = resolveStackElementValue(leftOperandElement, symbolEnvironment);
+  if (!leftResolutionResult.ok) return leftResolutionResult;
 
-  const right = rightRes.value;
-  const left = leftRes.value;
+  const rightRuntimeValue = rightResolutionResult.value;
+  const leftRuntimeValue = leftResolutionResult.value;
 
-  if (left.kind !== 'boolean') {
-    return err(EvaluatorError.typeMismatch(op, 'boolean', left.kind));
+  if (leftRuntimeValue.kind !== 'boolean') {
+    return err(EvaluatorError.typeMismatch(operator, 'boolean', leftRuntimeValue.kind));
   }
-  if (right.kind !== 'boolean') {
-    return err(EvaluatorError.typeMismatch(op, 'boolean', right.kind));
+  if (rightRuntimeValue.kind !== 'boolean') {
+    return err(EvaluatorError.typeMismatch(operator, 'boolean', rightRuntimeValue.kind));
   }
 
-  const boolVal = op === 'and' ? left.value && right.value : left.value || right.value;
-  const value: BooleanValue = { kind: 'boolean', value: boolVal };
-  stack.push(value);
+  const evaluatedBoolean =
+    operator === 'and'
+      ? leftRuntimeValue.value && rightRuntimeValue.value
+      : leftRuntimeValue.value || rightRuntimeValue.value;
+
+  const computedValue: BooleanValue = { kind: 'boolean', value: evaluatedBoolean };
+  evaluationStack.push(computedValue);
   return ok(undefined);
 }
 
 /**
  * Ejecuta la asignación postfija de variables (operador '=').
  * Sintaxis esperada:
- *   x 10 =
- *   x 5 2 + =
+ *   base 10 =
+ *   subtotal 5 2 + =
  * En la pila, el tope es el valor asignado y el elemento anterior es la referencia destino.
  */
-function executeAssignment(
-  stack: Stack<StackElement>,
-  env: Environment
+function evaluateAssignmentOperation(
+  evaluationStack: Stack<StackElement>,
+  symbolEnvironment: Environment
 ): Result<string, EvaluatorError> {
-  if (stack.size() < 2) {
-    return err(EvaluatorError.stackUnderflow('=', 2, stack.size()));
+  if (evaluationStack.size() < 2) {
+    return err(EvaluatorError.stackUnderflow('=', 2, evaluationStack.size()));
   }
 
-  // Extraer valor (derecho)
-  const valElem = stack.pop()!;
-  // Extraer destino (izquierdo)
-  const targetElem = stack.pop()!;
+  // Extraer valor a asignar (tope / derecho)
+  const valueElement = evaluationStack.pop()!;
+  // Extraer destino (anterior / izquierdo)
+  const targetElement = evaluationStack.pop()!;
 
-  if (targetElem.kind !== 'ref') {
+  if (targetElement.kind !== 'ref') {
     return err(
       EvaluatorError.invalidAssignment(
-        `valor de tipo '${targetElem.kind}' en lugar de identificador`
+        `valor de tipo '${targetElement.kind}' en lugar de identificador`
       )
     );
   }
 
-  const valRes = resolveValue(valElem, env);
-  if (!valRes.ok) return valRes;
+  const valueResolutionResult = resolveStackElementValue(valueElement, symbolEnvironment);
+  if (!valueResolutionResult.ok) return valueResolutionResult;
 
-  const runtimeValue = valRes.value;
-  env.define(targetElem.name, runtimeValue);
+  const resolvedRuntimeValue = valueResolutionResult.value;
+  symbolEnvironment.defineVariable(targetElement.name, resolvedRuntimeValue);
 
-  return ok(`[Asignación] ${targetElem.name} = ${runtimeValue.value} (${runtimeValue.kind})`);
+  return ok(
+    `[Asignación] ${targetElement.name} = ${resolvedRuntimeValue.value} (${resolvedRuntimeValue.kind})`
+  );
 }
 
 /**
  * Evalúa un único token sobre la pila y el entorno proporcionados explícitamente.
- * Retorna un Result indicando éxito o error, junto con el entorno activo (que puede cambiar con begin/end).
+ * Retorna un Result indicando éxito o error, junto con el entorno activo (que puede cambiar con begin/scope o end/endscope).
  */
 export function evaluateToken(
   token: Token,
-  stack: Stack<StackElement>,
-  env: Environment
+  evaluationStack: Stack<StackElement>,
+  symbolEnvironment: Environment
 ): Result<{ env: Environment; message?: string; shouldExit?: boolean }, EvaluatorError> {
   switch (token.kind) {
     case 'NUMBER': {
-      stack.push({ kind: 'number', value: token.value });
-      return ok({ env });
+      evaluationStack.push({ kind: 'number', value: token.value });
+      return ok({ env: symbolEnvironment });
     }
 
     case 'BOOLEAN': {
-      stack.push({ kind: 'boolean', value: token.value });
-      return ok({ env });
+      evaluationStack.push({ kind: 'boolean', value: token.value });
+      return ok({ env: symbolEnvironment });
     }
 
     case 'IDENTIFIER': {
-      // Se coloca como referencia simbólica en la pila.
+      // Se coloca como referencia simbólica mnemotécnica en la pila.
       // Se resolverá a su valor cuando sea requerida por un operador,
       // o servirá como destino si le sigue una asignación '='.
-      stack.push({ kind: 'ref', name: token.name });
-      return ok({ env });
+      evaluationStack.push({ kind: 'ref', name: token.name });
+      return ok({ env: symbolEnvironment });
     }
 
     case 'OPERATOR': {
       if (token.op === '=') {
-        const assignRes = executeAssignment(stack, env);
-        if (!assignRes.ok) return assignRes;
-        return ok({ env, message: assignRes.value });
+        const assignmentResult = evaluateAssignmentOperation(evaluationStack, symbolEnvironment);
+        if (!assignmentResult.ok) return assignmentResult;
+        return ok({ env: symbolEnvironment, message: assignmentResult.value });
       }
 
       if (token.op === '+' || token.op === '-' || token.op === '*' || token.op === '/') {
-        const arithRes = executeArithmetic(token.op, stack, env);
-        if (!arithRes.ok) return arithRes;
-        return ok({ env });
+        const arithmeticResult = evaluateArithmeticOperation(token.op, evaluationStack, symbolEnvironment);
+        if (!arithmeticResult.ok) return arithmeticResult;
+        return ok({ env: symbolEnvironment });
       }
 
       if (
@@ -327,15 +336,15 @@ export function evaluateToken(
         token.op === '<=' ||
         token.op === '>='
       ) {
-        const compRes = executeComparison(token.op, stack, env);
-        if (!compRes.ok) return compRes;
-        return ok({ env });
+        const comparisonResult = evaluateComparisonOperation(token.op, evaluationStack, symbolEnvironment);
+        if (!comparisonResult.ok) return comparisonResult;
+        return ok({ env: symbolEnvironment });
       }
 
       if (token.op === 'and' || token.op === 'or' || token.op === 'not') {
-        const boolRes = executeBoolean(token.op, stack, env);
-        if (!boolRes.ok) return boolRes;
-        return ok({ env });
+        const booleanResult = evaluateBooleanOperation(token.op, evaluationStack, symbolEnvironment);
+        if (!booleanResult.ok) return booleanResult;
+        return ok({ env: symbolEnvironment });
       }
 
       return err(EvaluatorError.syntaxError(token.raw));
@@ -343,84 +352,99 @@ export function evaluateToken(
 
     case 'COMMAND': {
       switch (token.command) {
-        case 'begin': {
-          const childEnv = env.createChild();
+        case 'begin':
+        case 'scope': {
+          const childEnvironment = symbolEnvironment.createChildScope();
           return ok({
-            env: childEnv,
-            message: `[Scope] Bloque local iniciado (Nivel ${childEnv.depth}).`
+            env: childEnvironment,
+            message: `[Scope] Bloque local iniciado (Nivel ${childEnvironment.depth}).`
           });
         }
 
-        case 'end': {
+        case 'end':
+        case 'endscope': {
           try {
-            const parentEnv = env.popChild();
+            const parentEnvironment = symbolEnvironment.popChildScope();
             return ok({
-              env: parentEnv,
-              message: `[Scope] Bloque local cerrado. Restaurado a Nivel ${parentEnv.depth}.`
+              env: parentEnvironment,
+              message: `[Scope] Bloque local cerrado. Restaurado a Nivel ${parentEnvironment.depth}.`
             });
-          } catch (e) {
-            if (e instanceof EvaluatorError) {
-              return err(e);
+          } catch (caughtException) {
+            if (caughtException instanceof EvaluatorError) {
+              return err(caughtException);
             }
-            throw e;
+            throw caughtException;
           }
         }
 
-        case 'vars': {
-          const vars = env.getActiveVariables();
-          if (vars.length === 0) {
-            return ok({ env, message: '[Variables] No hay variables definidas en memoria.' });
+        case 'vars':
+        case 'env':
+        case 'symbols': {
+          const activeVariables = symbolEnvironment.getActiveVariables();
+          if (activeVariables.length === 0) {
+            return ok({
+              env: symbolEnvironment,
+              message: '[Variables] No hay variables definidas en memoria.'
+            });
           }
-          const formatted = vars
-            .map((v) => {
-              const scopeLabel = v.scopeDepth === 0 ? 'global [0]' : `local [${v.scopeDepth}]`;
-              return `  ${v.name} = ${v.value.value} (${v.value.kind}, ${scopeLabel})`;
+          const formattedVariables = activeVariables
+            .map((variableInfo) => {
+              const scopeLabel =
+                variableInfo.scopeDepth === 0
+                  ? 'global [0]'
+                  : `local [${variableInfo.scopeDepth}]`;
+              return `  ${variableInfo.name} = ${variableInfo.value.value} (${variableInfo.value.kind}, ${scopeLabel})`;
             })
             .join('\n');
-          return ok({ env, message: `[Variables Activas]\n${formatted}` });
+          return ok({ env: symbolEnvironment, message: `[Variables Activas]\n${formattedVariables}` });
         }
 
         case 'stack': {
-          if (stack.isEmpty()) {
-            return ok({ env, message: '[Pila] (vacía)' });
+          if (evaluationStack.isEmpty()) {
+            return ok({ env: symbolEnvironment, message: '[Pila] (vacía)' });
           }
-          const elements = stack.toArray().map((elem, idx) => {
-            if (elem.kind === 'ref') {
-              const res = env.lookup(elem.name);
-              const valDesc = res !== undefined ? `${res.value} (${res.kind})` : 'no definida';
-              return `  [${idx}]: Ref('${elem.name}') -> ${valDesc}`;
+          const formattedStackElements = evaluationStack.toArray().map((element, index) => {
+            if (element.kind === 'ref') {
+              const resolved = symbolEnvironment.lookupVariable(element.name);
+              const valueDescription =
+                resolved !== undefined ? `${resolved.value} (${resolved.kind})` : 'no definida';
+              return `  [${index}]: Ref('${element.name}') -> ${valueDescription}`;
             }
-            return `  [${idx}]: ${elem.value} (${elem.kind})`;
+            return `  [${index}]: ${element.value} (${element.kind})`;
           });
-          return ok({ env, message: `[Contenido de la Pila]\n${elements.join('\n')}` });
+          return ok({
+            env: symbolEnvironment,
+            message: `[Contenido de la Pila]\n${formattedStackElements.join('\n')}`
+          });
         }
 
         case 'clear': {
-          stack.clear();
-          return ok({ env, message: '[Pila] Pila vaciada correctamente.' });
+          evaluationStack.clear();
+          return ok({ env: symbolEnvironment, message: '[Pila] Pila vaciada correctamente.' });
         }
 
         case 'help': {
-          const helpText = [
+          const helpMessage = [
             'Comandos del Evaluador Postfijo (RPN):',
             '  <núm> <núm> + | - | * | /    : Operaciones aritméticas',
             '  <val> <val> == | !=          : Comparaciones de igualdad',
             '  <núm> <núm> < | > | <= | >=  : Comparaciones relacionales',
             '  <bool> <bool> and | or       : Operaciones lógicas booleanas',
             '  <bool> not                   : Negación lógica',
-            '  <id> <expr> =                : Asignación de variables (ej. x 10 =)',
-            '  begin / end                  : Apertura y cierre de ámbito local (shadowing)',
-            '  vars                         : Listar variables activas y sus niveles de scope',
+            '  <id> <expr> =                : Asignación de variables (ej. base 10 =, total 5 2 + =)',
+            '  begin / scope                : Apertura de ámbito local (shadowing)',
+            '  end / endscope               : Cierre de ámbito local y descarte de variables',
+            '  vars / env / symbols         : Listar variables activas y sus niveles de scope',
             '  stack                        : Inspeccionar el estado de la pila',
             '  clear                        : Limpiar todos los elementos de la pila',
             '  help                         : Mostrar esta ayuda',
             '  exit                         : Salir del REPL'
           ].join('\n');
-          return ok({ env, message: helpText });
+          return ok({ env: symbolEnvironment, message: helpMessage });
         }
 
         case 'exit': {
-          return ok({ env, shouldExit: true });
+          return ok({ env: symbolEnvironment, shouldExit: true });
         }
       }
     }
@@ -433,60 +457,60 @@ export function evaluateToken(
  * En caso de error, restaura el estado previo de la pila para prevenir corrupción.
  */
 export function evaluateLine(
-  line: string,
-  stack: Stack<StackElement>,
-  env: Environment
+  expressionLine: string,
+  evaluationStack: Stack<StackElement>,
+  symbolEnvironment: Environment
 ): Result<EvaluationResult, EvaluatorError> {
-  const tokenResult = tokenize(line);
-  if (!tokenResult.ok) {
-    return tokenResult;
+  const tokenizationResult = tokenize(expressionLine);
+  if (!tokenizationResult.ok) {
+    return tokenizationResult;
   }
 
-  const tokens = tokenResult.value;
+  const tokens = tokenizationResult.value;
   if (tokens.length === 0) {
-    return ok({ env });
+    return ok({ env: symbolEnvironment });
   }
 
   // Clon de respaldo de la pila para atomicidad por línea en caso de error
-  const backupStack = stack.clone();
-  let currentEnv = env;
-  const messages: string[] = [];
-  let shouldExit = false;
+  const backupEvaluationStack = evaluationStack.clone();
+  let activeEnvironment = symbolEnvironment;
+  const collectedMessages: string[] = [];
+  let shouldTerminateExecution = false;
 
   for (const token of tokens) {
-    const res = evaluateToken(token, stack, currentEnv);
-    if (!res.ok) {
+    const tokenEvaluationResult = evaluateToken(token, evaluationStack, activeEnvironment);
+    if (!tokenEvaluationResult.ok) {
       // Restauramos la pila para evitar estados inconsistentes
-      stack.clear();
-      for (const item of backupStack.toArray()) {
-        stack.push(item);
+      evaluationStack.clear();
+      for (const item of backupEvaluationStack.toArray()) {
+        evaluationStack.push(item);
       }
-      return res;
+      return tokenEvaluationResult;
     }
 
-    currentEnv = res.value.env;
-    if (res.value.message) {
-      messages.push(res.value.message);
+    activeEnvironment = tokenEvaluationResult.value.env;
+    if (tokenEvaluationResult.value.message) {
+      collectedMessages.push(tokenEvaluationResult.value.message);
     }
-    if (res.value.shouldExit) {
-      shouldExit = true;
+    if (tokenEvaluationResult.value.shouldExit) {
+      shouldTerminateExecution = true;
     }
   }
 
   // Inspección del tope de la pila tras evaluar la línea
-  let topValue: RuntimeValue | undefined = undefined;
-  if (!stack.isEmpty()) {
-    const topElem = stack.peek()!;
-    const resolved = resolveValue(topElem, currentEnv);
-    if (resolved.ok) {
-      topValue = resolved.value;
+  let topRuntimeValue: RuntimeValue | undefined = undefined;
+  if (!evaluationStack.isEmpty()) {
+    const topElement = evaluationStack.peek()!;
+    const resolvedResult = resolveStackElementValue(topElement, activeEnvironment);
+    if (resolvedResult.ok) {
+      topRuntimeValue = resolvedResult.value;
     }
   }
 
   return ok({
-    env: currentEnv,
-    topValue,
-    message: messages.length > 0 ? messages.join('\n') : undefined,
-    shouldExit
+    env: activeEnvironment,
+    topValue: topRuntimeValue,
+    message: collectedMessages.length > 0 ? collectedMessages.join('\n') : undefined,
+    shouldExit: shouldTerminateExecution
   });
 }

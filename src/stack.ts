@@ -7,65 +7,66 @@
  */
 
 export class Stack<T> {
-  private readonly items: T[];
+  private readonly stackElements: T[];
 
-  constructor(initialItems: readonly T[] = []) {
-    this.items = [...initialItems];
+  constructor(initialElements: readonly T[] = []) {
+    this.stackElements = [...initialElements];
   }
 
   /**
    * Inserta un elemento en el tope de la pila.
    */
-  push(item: T): void {
-    this.items.push(item);
+  push(element: T): void {
+    this.stackElements.push(element);
   }
 
   /**
    * Extrae y devuelve el elemento del tope de la pila, o undefined si está vacía.
    */
   pop(): T | undefined {
-    return this.items.pop();
+    return this.stackElements.pop();
   }
 
   /**
    * Consulta el elemento en el tope sin extraerlo.
    */
   peek(): T | undefined {
-    return this.items.length > 0 ? this.items[this.items.length - 1] : undefined;
+    const totalCount = this.stackElements.length;
+    return totalCount > 0 ? this.stackElements[totalCount - 1] : undefined;
   }
 
   /**
    * Cantidad actual de elementos en la pila.
    */
   size(): number {
-    return this.items.length;
+    return this.stackElements.length;
   }
 
   /**
    * Determina si la pila está vacía.
    */
   isEmpty(): boolean {
-    return this.items.length === 0;
+    return this.stackElements.length === 0;
   }
 
   /**
    * Vacía todos los elementos de la pila.
    */
   clear(): void {
-    this.items.length = 0;
+    this.stackElements.length = 0;
   }
 
   /**
    * Devuelve una copia superficial de los elementos desde el fondo hasta el tope.
    */
   toArray(): T[] {
-    return [...this.items];
+    return [...this.stackElements];
   }
 
   /**
    * Crea una copia profunda o independiente de la pila.
    */
   clone(): Stack<T> {
-    return new Stack<T>(this.items);
+    return new Stack<T>(this.stackElements);
   }
 }

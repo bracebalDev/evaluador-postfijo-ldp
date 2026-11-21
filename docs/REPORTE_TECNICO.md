@@ -5,7 +5,9 @@
 ---
 # Reporte Técnico: Análisis del Diseño e Implementación de TypeScript a través de un Evaluador Postfijo (RPN)
 
+**Autores:** Brayan Ceballos y Andrés Crespo  
 **Docente:** Prof. Jesús Pelay  
+**Propósito:** Desarrollado exclusivamente con fines académicos  
 **Lenguaje Seleccionado:** TypeScript (v5.x / ECMAScript 2022+)  
 **Entorno de Ejecución:** Node.js (Motor V8)  
 **Proyecto:** Mini-REPL y Evaluador en Notación Polaca Inversa (`evaluador-postfijo-ldp`)  
@@ -16,13 +18,15 @@
 
 El presente informe constituye la **Parte I** de la Asignación #1 de la cátedra de *Lenguajes de Programación*. En este documento se examinan los fundamentos teóricos y prácticos de **TypeScript**, un superconjunto tipado de JavaScript desarrollado por Microsoft que añade tipado estático opcional, abstracciones algebraicas y contratos estructurales sobre la semántica de ejecución de ECMAScript.
 
+Esta aplicación y su respectivo informe han sido elaborados por **Brayan Ceballos** y **Andrés Crespo** con fines estrictamente pedagógicos y de investigación formativa.
+
 El análisis se estructura en cuatro ejes fundamentales del diseño de lenguajes de programación:
 1. Nombres, vinculación (*binding*), estructuras de control y reglas de alcance (*scoping*).
 2. Sistema de tipos de datos, chequeo de tipos (estático vs. dinámico), inferencia y equivalencia de tipos.
 3. Subrutinas, paso de parámetros (*call-by-sharing* / valor vs. referencia) y modelo de memoria en el motor V8.
 4. Abstracción de datos, programación orientada a objetos (POO), interfaces y unión discriminada (*tagged unions*).
 
-Cada sección se encuentra respaldada teóricamente con la especificación del lenguaje y contrastada directamente con la implementación del evaluador postfijo (*Mini-REPL en RPN*) desarrollado en la **Parte II**.
+Cada sección se encuentra respaldada teóricamente con la especificación del lenguaje y contrastada directamente con la implementación del evaluador postfijo (*Mini-REPL en RPN*) desarrollado en la **Parte II**. La arquitectura del software implementa intencionalmente **funciones con nombres mnemotécnicos** (`evaluateArithmeticOperation`, `evaluateComparisonOperation`, `evaluateBooleanOperation`, `evaluateAssignmentOperation`, `createChildScope`, `popChildScope`, `defineVariable`, `lookupVariable`), manteniendo a la vez los identificadores estándar indicados en la especificación del proyecto (`x 10 =`, `x 5 + 2 *`, `begin`/`end`, `vars`).
 
 ---
 
@@ -31,7 +35,7 @@ Cada sección se encuentra respaldada teóricamente con la especificación del l
 ### 1.1. Nombres y Reglas Léxicas de Identificadores
 En TypeScript, los identificadores siguen la especificación de identificadores Unicode de ECMAScript. Un identificador debe comenzar con una letra, un guion bajo (`_`) o el signo de dólar (`$`), seguido de caracteres alfanuméricos. 
 
-En nuestro evaluador, esta regla léxica se modela de forma determinista en el analizador léxico (`src/lexer.ts`):
+En nuestro evaluador, esta regla léxica se modela de forma determinista en el analizador léxico (`src/lexer.ts`), soportando identificadores como `x`, `y`, `z`, `total` o nombres compuestos:
 ```typescript
 // src/lexer.ts
 const IDENTIFIER_REGEX = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -56,28 +60,28 @@ El modificador `readonly` garantiza a nivel de compilación que los campos de un
 ### 1.3. Reglas de Alcance (*Scoping*) y Temporal Dead Zone (TDZ)
 TypeScript implementa **alcance léxico o estático** (*lexical scoping*). El ámbito de una variable queda determinado durante la fase de compilación según la estructura anidada de bloques (`{ ... }`) en el código fuente.
 
-Las variables declaradas con `let` y `const` residen en la *Temporal Dead Zone* (TDZ) desde el inicio del bloque hasta que se evalúa la instrucción de inicialización, impidiendo lecturas accidentales de variables no inicializadas (a diferencia del *hoisting* de `var` que producía `undefined`).
+Las variables declaradas con `let` y `const` residen en la *Temporal Dead Zone* (TDZ) desde el inicio del bloque hasta que se evalúa la instrucción de inicialización, impidiendo lecturas accidentales de variables no inicializadas.
 
 #### Reflejo en el Evaluador: Scoping y Shadowing en el Mini-REPL
-Para cumplir con el Requisito #4 de la asignación, implementamos una estructura de datos jerárquica `Environment` (`src/environment.ts`) que reproduce exactamente la semántica de la cadena de ámbitos léxicos (*scope chain*):
+Para cumplir con el Requisito #4 de la asignación, implementamos una estructura de datos jerárquica `Environment` (`src/environment.ts`) que reproduce exactamente la semántica de la cadena de ámbitos léxicos (*scope chain*) con métodos mnemotécnicos:
 
 ```typescript
 // src/environment.ts
 export class Environment {
-  private readonly bindings = new Map<string, RuntimeValue>();
+  private readonly symbolBindings = new Map<string, RuntimeValue>();
   readonly parent: Environment | null;
   readonly depth: number;
 
-  constructor(parent: Environment | null = null) {
-    this.parent = parent;
-    this.depth = parent ? parent.depth + 1 : 0;
+  constructor(parentScope: Environment | null = null) {
+    this.parent = parentScope;
+    this.depth = parentScope ? parentScope.depth + 1 : 0;
   }
 
-  createChild(): Environment {
+  createChildScope(): Environment {
     return new Environment(this);
   }
 
-  popChild(): Environment {
+  popChildScope(): Environment {
     if (this.parent === null) {
       throw EvaluatorError.scopeUnderflow();
     }
@@ -85,35 +89,39 @@ export class Environment {
   }
 ```
 
-Cuando el usuario ingresa el comando `begin`, se genera un nuevo entorno local hijo:
+Cuando el usuario ingresa el comando de apertura de bloque `begin`, se genera un nuevo entorno local hijo:
 ```typescript
 // src/evaluator.ts
-case 'begin': {
-  const childEnv = env.createChild();
-  return ok({ env: childEnv, message: `[Scope] Bloque local iniciado (Nivel ${childEnv.depth}).` });
+case 'begin':
+case 'scope': {
+  const childEnvironment = symbolEnvironment.createChildScope();
+  return ok({
+    env: childEnvironment,
+    message: `[Scope] Bloque local iniciado (Nivel ${childEnvironment.depth}).`
+  });
 }
 ```
 
 #### Sombreado de Variables (*Shadowing*):
-Si una variable homónima se define o actualiza dentro del bloque `begin ... end`, se vincula en el `Map` del ámbito local actual:
+Si una variable (como `x`) se define o actualiza dentro del bloque `begin ... end`, se vincula en el `Map` del ámbito local actual:
 ```typescript
 // src/environment.ts
-define(name: string, value: RuntimeValue): void {
-  this.bindings.set(name, value);
+defineVariable(identifierName: string, evaluatedValue: RuntimeValue): void {
+  this.symbolBindings.set(identifierName, evaluatedValue);
 }
 
-lookup(name: string): RuntimeValue | undefined {
-  const local = this.bindings.get(name);
-  if (local !== undefined) {
-    return local; // Resolución local prioritaria (Shadowing)
+lookupVariable(identifierName: string): RuntimeValue | undefined {
+  const localBinding = this.symbolBindings.get(identifierName);
+  if (localBinding !== undefined) {
+    return localBinding; // Resolución local prioritaria (Shadowing)
   }
   if (this.parent !== null) {
-    return this.parent.lookup(name); // Ascenso por la cadena de ámbitos
+    return this.parent.lookupVariable(identifierName); // Ascenso por la cadena de ámbitos
   }
   return undefined;
 }
 ```
-Al invocar `end`, la referencia del entorno actual regresa a `this.parent`, descartando el mapa de variables locales y liberándolo para el recolector de basura (*Garbage Collector*). De esta forma, la variable global homónima retoma su valor original sin haber sido sobrescrita.
+Al invocar `end`, la referencia del entorno actual regresa a `this.parent`, descartando el mapa de variables locales y liberándolo para el recolector de basura (*Garbage Collector*). De esta forma, la variable global homónima (`x`) retoma su valor original (ej. 10) sin haber sido sobrescrita.
 
 ### 1.4. Estructuras de Control
 TypeScript cuenta con estructuras de control tradicionales condicionales (`if/else`, `switch`) y de iteración (`for`, `for...of`, `while`). 
@@ -150,18 +158,18 @@ export interface BooleanValue {
 export type RuntimeValue = NumberValue | BooleanValue;
 ```
 
-La propiedad literal `kind` actúa como **discriminador de tipo**. En tiempo de compilación, TypeScript utiliza `kind` para estrechar el tipo (*type narrowing*). En tiempo de ejecución, el evaluador consulta `kind` para validar las restricciones semánticas de las operaciones:
+La propiedad literal `kind` actúa como **discriminador de tipo**. En tiempo de compilación, TypeScript utiliza `kind` para estrechar el tipo (*type narrowing*). En tiempo de ejecución, la función evaluadora mnemotécnica `evaluateArithmeticOperation` consulta `kind` para validar las restricciones semánticas de las operaciones:
 
 ```typescript
 // src/evaluator.ts: Chequeo dinámico estricto en operaciones aritméticas
-if (left.kind !== 'number') {
-  return err(EvaluatorError.typeMismatch(op, 'number', left.kind));
+if (leftRuntimeValue.kind !== 'number') {
+  return err(EvaluatorError.typeMismatch(operator, 'number', leftRuntimeValue.kind));
 }
-if (right.kind !== 'number') {
-  return err(EvaluatorError.typeMismatch(op, 'number', right.kind));
+if (rightRuntimeValue.kind !== 'number') {
+  return err(EvaluatorError.typeMismatch(operator, 'number', rightRuntimeValue.kind));
 }
 ```
-Si el usuario intenta ejecutar `5 true +`, el evaluador intercepta la incompatibilidad de tipos antes de realizar cualquier cálculo en el motor anfitrión, emitiendo un `EvaluatorError` estructurado sin abortar el proceso.
+Si el usuario intenta ejecutar la expresión de prueba `5 true +`, el evaluador intercepta la incompatibilidad de tipos antes de realizar cualquier cálculo en el motor anfitrión, emitiendo un `EvaluatorError` estructurado sin abortar el proceso.
 
 ### 2.3. Inferencia de Tipos
 El compilador de TypeScript calcula automáticamente los tipos sin necesidad de anotaciones redundantes mediante algoritmos de flujo de control. Por ejemplo:
@@ -175,7 +183,7 @@ export function ok<T>(value: T): Result<T, never> {
   return { ok: true, value };
 }
 ```
-Al invocar `ok(childEnv)`, TypeScript infiere que el tipo retornado es exactamente `Result<Environment, never>`.
+Al invocar `ok(childEnvironment)`, TypeScript infiere que el tipo retornado es exactamente `Result<Environment, never>`.
 
 ### 2.4. Equivalencia de Tipos: Estructural vs. Nominal
 En TypeScript, dos interfaces con la misma estructura son mutuamente asignables:
@@ -208,23 +216,23 @@ El Requisito #3 de la asignación exige que la tabla de símbolos y la pila se p
 // src/evaluator.ts
 export function evaluateToken(
   token: Token,
-  stack: Stack<StackElement>,
-  env: Environment
+  evaluationStack: Stack<StackElement>,
+  symbolEnvironment: Environment
 ): Result<{ env: Environment; message?: string; shouldExit?: boolean }, EvaluatorError> {
-  // stack es una referencia mutada explícitamente (push/pop)
-  // env se consulta o se genera un nuevo nodo de la cadena de ámbitos
+  // evaluationStack es una referencia mutada explícitamente (push/pop)
+  // symbolEnvironment se consulta o se genera un nuevo nodo de la cadena de ámbitos
 ```
 
-Al invocar `stack.push(...)` o `stack.pop()`, la mutación se refleja de inmediato en la pila del llamante gracias a que se opera sobre el objeto compartido en el Heap. 
+Al invocar `evaluationStack.push(...)` o `evaluationStack.pop()`, la mutación se refleja de inmediato en la pila del llamante gracias a que se opera sobre el objeto compartido en el Heap. 
 
 En contraste, para el entorno léxico (`Environment`), al crear o cerrar ámbitos (`begin`/`end`), la subrutina no reasigna la variable del llamante en silencio; retorna explícitamente la nueva referencia activa encapsulada en la mónada `Result`:
 ```typescript
 // src/evaluator.ts (en evaluateLine)
-let currentEnv = env;
+let activeEnvironment = symbolEnvironment;
 for (const token of tokens) {
-  const res = evaluateToken(token, stack, currentEnv);
-  if (!res.ok) { ... }
-  currentEnv = res.value.env; // Actualización explícita de referencia
+  const tokenEvaluationResult = evaluateToken(token, evaluationStack, activeEnvironment);
+  if (!tokenEvaluationResult.ok) { ... }
+  activeEnvironment = tokenEvaluationResult.value.env; // Actualización explícita de referencia
 }
 ```
 
@@ -241,12 +249,13 @@ TypeScript delega la administración de memoria en el recolector de basura de V8
 #### Liberación de Memoria al Cerrar Ámbitos (`end`):
 Cuando un bloque local finaliza mediante `end`:
 ```typescript
-case 'end': {
-  const parentEnv = env.popChild();
-  return ok({ env: parentEnv, ... });
+case 'end':
+case 'endscope': {
+  const parentEnvironment = symbolEnvironment.popChildScope();
+  return ok({ env: parentEnvironment, ... });
 }
 ```
-La referencia al `childEnv` deja de ser alcanzable desde el árbol de raíces (*GC Roots*). En el siguiente ciclo de recolección de basura, V8 detecta que el mapa de variables locales no tiene referencias activas y libera su memoria automáticamente, evitando fugas de memoria (*memory leaks*).
+La referencia al entorno local hijo deja de ser alcanzable desde el árbol de raíces (*GC Roots*). En el siguiente ciclo de recolección de basura, V8 detecta que el mapa de variables locales no tiene referencias activas y libera su memoria automáticamente, evitando fugas de memoria (*memory leaks*).
 
 ---
 
@@ -260,22 +269,22 @@ La clase `Stack<T>` encapsula la estructura subyacente de arreglo y expone una A
 ```typescript
 // src/stack.ts
 export class Stack<T> {
-  private readonly items: T[];
+  private readonly stackElements: T[];
 
-  constructor(initialItems: readonly T[] = []) {
-    this.items = [...initialItems];
+  constructor(initialElements: readonly T[] = []) {
+    this.stackElements = [...initialElements];
   }
 
-  push(item: T): void { this.items.push(item); }
-  pop(): T | undefined { return this.items.pop(); }
-  peek(): T | undefined { return this.items.length > 0 ? this.items[this.items.length - 1] : undefined; }
-  size(): number { return this.items.length; }
-  isEmpty(): boolean { return this.items.length === 0; }
-  clear(): void { this.items.length = 0; }
-  clone(): Stack<T> { return new Stack<T>(this.items); }
+  push(element: T): void { this.stackElements.push(element); }
+  pop(): T | undefined { return this.stackElements.pop(); }
+  peek(): T | undefined { ... }
+  size(): number { return this.stackElements.length; }
+  isEmpty(): boolean { return this.stackElements.length === 0; }
+  clear(): void { this.stackElements.length = 0; }
+  clone(): Stack<T> { return new Stack<T>(this.stackElements); }
 }
 ```
-El modificador de visibilidad `private` restringe el acceso directo al arreglo interno `items`, impidiendo que el consumidor altere índices arbitrarios y garantizando la semántica estricta LIFO (*Last-In, First-Out*).
+El modificador de visibilidad `private` restringe el acceso directo al arreglo interno `stackElements`, impidiendo que el consumidor altere índices arbitrarios y garantizando la semántica estricta LIFO (*Last-In, First-Out*).
 
 ### 4.2. Polimorfismo Paramétrico (Genéricos)
 La clase `Stack<T>` implementa polimorfismo paramétrico mediante el parámetro de tipo genérico `T`. Esto permite reutilizar la misma estructura para almacenar tokens léxicos, valores en tiempo de ejecución (`Stack<StackElement>`) o cualquier otro tipo, garantizando seguridad estática de tipos sin costo en tiempo de ejecución.
@@ -296,7 +305,7 @@ export class EvaluatorError extends Error {
     this.details = details;
     Object.setPrototypeOf(this, new.target.prototype);
   }
-  // Métodos factoría estáticos (Design Pattern: Factory Method)
+  // Métodos factoría estáticos mnemotécnicos (Design Pattern: Factory Method)
   static stackUnderflow(operation: string, required: number, found: number): EvaluatorError { ... }
   static divisionByZero(): EvaluatorError { ... }
 }
@@ -326,8 +335,8 @@ export type Result<T, E = EvaluatorError> =
 |---|---|---|
 | **1. Evaluación en Pila y Errores** | `src/stack.ts`, `src/evaluator.ts`, `src/error.ts` | Pila genérica `Stack<T>`. Errores representados mediante `Result<T, E>` y clase `EvaluatorError`. Manejo de división por cero y stack underflow sin abortos. |
 | **2. Sistema de Tipos del Evaluador** | `src/types.ts`, `src/evaluator.ts` | Tipos compuestos y *Tagged Unions* (`NumberValue`, `BooleanValue`, `VariableRef`). Chequeo dinámico en tiempo de ejecución con error de tipos controlado (`TYPE_ERROR`). |
-| **3. Variables y Paso de Parámetros** | `src/environment.ts`, `src/evaluator.ts` | Asignación postfija (`x 10 =`, `x 5 2 + =`). Comando `vars`. Paso explícito de `stack` y `env` demostrando mutabilidad en *Call-by-Sharing*. |
-| **4. Scoping y Shadowing** | `src/environment.ts` (`begin`/`end`) | Ámbitos anidados mediante lista ligada de entornos (`parent`). Variables locales enmascaran globales sin sobrescribirlas al hacer `end`. |
+| **3. Variables y Paso de Parámetros** | `src/environment.ts`, `src/evaluator.ts` | Asignación postfija (`x 10 =`, `x 5 2 + =`, `x 5 + 2 *`). Consulta de memoria (`vars`). Paso explícito de `evaluationStack` y `symbolEnvironment` (*Call-by-Sharing*). |
+| **4. Scoping y Shadowing** | `src/environment.ts` (`begin`/`end`) | Ámbitos anidados mediante lista ligada de entornos (`parent`). Variables locales (`x 99 =`) enmascaran globales sin sobrescribirlas al salir del bloque con `end`. |
 
 ---
 
@@ -335,7 +344,7 @@ export type Result<T, E = EvaluatorError> =
 
 La implementación del Evaluador Postfijo en **TypeScript** evidencia las fortalezas del lenguaje al conjugar la flexibilidad y universalidad del modelo de ejecución de ECMAScript con la robustez y disciplina de un sistema de tipos estático y moderno.
 
-Mediante el uso de **uniones discriminadas**, **inmutabilidad léxica**, **paso explícito de referencias** y el **patrón Result**, se obtuvo una arquitectura de software limpia, determinista, libre de efectos secundarios imprevistos y plenamente conforme con los rigurosos estándares teóricos de la asignatura *Lenguajes de Programación*.
+Desarrollado por **Brayan Ceballos** y **Andrés Crespo**, este proyecto demuestra cómo el empleo de **uniones discriminadas**, **inmutabilidad léxica**, **funciones mnemotécnicas altamente legibles**, **paso explícito de referencias** y el **patrón Result** permite construir una herramienta académica rigurosa, elegante y libre de fallos imprevistos, satisfaciendo la totalidad de los requisitos formativos de la cátedra *Lenguajes de Programación*.
 
 ---
 **Universidad de Carabobo — Facultad Experimental de Ciencias y Tecnología — 2026**
