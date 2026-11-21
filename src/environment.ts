@@ -1,13 +1,4 @@
-/**
- * environment.ts
- *
- * Implementación del Entorno Léxico (Tabla de Símbolos) con soporte para
- * encadenamiento de ámbitos (Scoping), sombreado de variables (Shadowing)
- * y bloques locales mediante 'begin'/'scope' y 'end'/'endscope'.
- * 
- * Utiliza identificadores y métodos mnemotécnicos para reflejar claramente
- * la semántica formal de la tabla de símbolos.
- */
+// Tabla de símbolos con soporte para ámbitos anidados y shadowing.
 
 import type { RuntimeValue, VariableInfo } from './types.js';
 import { EvaluatorError } from './error.js';
@@ -22,7 +13,6 @@ export class Environment {
     this.depth = parentScope ? parentScope.depth + 1 : 0;
   }
 
-  // Alias mnemotécnicos de propiedades para expresividad del código
   get parentScope(): Environment | null {
     return this.parent;
   }
@@ -31,9 +21,7 @@ export class Environment {
     return this.depth;
   }
 
-  /**
-   * Crea un nuevo ámbito hijo anidado (activado por 'begin' o 'scope').
-   */
+  // Crea un nuevo ámbito hijo (usado por begin / scope)
   createChildScope(): Environment {
     return new Environment(this);
   }
@@ -42,10 +30,7 @@ export class Environment {
     return this.createChildScope();
   }
 
-  /**
-   * Cierra el ámbito local actual y retorna el ámbito padre (activado por 'end' o 'endscope').
-   * Lanza un error controlado si se intenta cerrar el ámbito raíz o global.
-   */
+  // Cierra el ámbito actual y regresa al padre (usado por end / endscope)
   popChildScope(): Environment {
     if (this.parent === null) {
       throw EvaluatorError.scopeUnderflow();
@@ -57,12 +42,7 @@ export class Environment {
     return this.popChildScope();
   }
 
-  /**
-   * Define o asigna una variable en la tabla de símbolos del ámbito local actual.
-   * Conforme al requerimiento de la asignación: las variables definidas o modificadas
-   * dentro de un bloque local 'begin'...'end' residen en dicho ámbito (shadowing),
-   * garantizando que no sobrescriban permanentemente variables homónimas del entorno global.
-   */
+  // Registra o actualiza una variable en el ámbito local actual
   defineVariable(identifierName: string, evaluatedValue: RuntimeValue): void {
     this.symbolBindings.set(identifierName, evaluatedValue);
   }
@@ -71,10 +51,7 @@ export class Environment {
     this.defineVariable(identifierName, evaluatedValue);
   }
 
-  /**
-   * Busca el valor de una variable, resolviendo primero en el ámbito local actual
-   * y ascendiendo en la cadena de entornos ancestros si no se encuentra (resolución léxica).
-   */
+  // Busca una variable primero en el entorno local y luego en la cadena de padres
   lookupVariable(identifierName: string): RuntimeValue | undefined {
     const localBinding = this.symbolBindings.get(identifierName);
     if (localBinding !== undefined) {
@@ -90,9 +67,6 @@ export class Environment {
     return this.lookupVariable(identifierName);
   }
 
-  /**
-   * Verifica si una variable existe en este ámbito o en sus ancestros.
-   */
   hasVariable(identifierName: string): boolean {
     return this.lookupVariable(identifierName) !== undefined;
   }
@@ -101,16 +75,10 @@ export class Environment {
     return this.hasVariable(identifierName);
   }
 
-  /**
-   * Retorna una lista con todas las variables visibles actualmente en memoria,
-   * indicando su nombre, valor y nivel de profundidad de ámbito.
-   * Si una variable local sombrea a una global, se muestra la versión activa.
-   */
+  // Retorna todas las variables visibles actualmente en memoria
   getActiveVariables(): VariableInfo[] {
     const resolvedSymbolTable = new Map<string, VariableInfo>();
 
-    // Recorremos desde el ámbito actual hacia los padres.
-    // De esta forma, el ámbito más interno tiene precedencia (shadowing).
     let currentScopeNode: Environment | null = this;
     while (currentScopeNode !== null) {
       for (const [identifierName, evaluatedValue] of currentScopeNode.symbolBindings.entries()) {
@@ -130,9 +98,6 @@ export class Environment {
     );
   }
 
-  /**
-   * Retorna las variables definidas exclusivamente en este nivel de ámbito.
-   */
   getLocalBindings(): ReadonlyMap<string, RuntimeValue> {
     return this.symbolBindings;
   }

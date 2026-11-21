@@ -1,16 +1,4 @@
-/**
- * evaluator.ts
- *
- * Motor de evaluación para Notación Polaca Inversa (RPN) basada en pila.
- * Demuestra:
- *  - Paso explícito de la pila y tabla de símbolos como referencias mutables.
- *  - Chequeo dinámico de tipos con discriminated unions.
- *  - Manejo funcional de errores mediante el tipo Result<T, E>.
- *  - Operaciones aritméticas (+, -, *, /), comparaciones (==, !=, <, >, <=, >=)
- *    y booleanas explícitas (and, or, not).
- *  - Asignación de variables mnemotécnicas (base 10 =, subtotal 5 2 + =) y resolución léxica.
- *  - Comandos de control de ámbito (begin/scope, end/endscope) y visualización (vars/env, stack, clear).
- */
+// Motor de evaluación para expresiones en notación postfija (RPN).
 
 import type {
   Token,
@@ -36,11 +24,7 @@ export interface EvaluationResult {
   readonly shouldExit?: boolean | undefined;
 }
 
-/**
- * Resuelve un elemento de la pila a su valor final en tiempo de ejecución.
- * Si es un NumberValue o BooleanValue, lo retorna directamente.
- * Si es un VariableRef, busca su definición en el entorno léxico (Environment).
- */
+// Resuelve una referencia simbólica buscando su valor en la tabla de símbolos
 export function resolveStackElementValue(
   stackElement: StackElement,
   symbolEnvironment: Environment
@@ -49,7 +33,6 @@ export function resolveStackElementValue(
     return ok(stackElement);
   }
 
-  // stackElement.kind === 'ref'
   const resolvedBinding = symbolEnvironment.lookupVariable(stackElement.name);
   if (resolvedBinding === undefined) {
     return err(EvaluatorError.undefinedVariable(stackElement.name));
@@ -57,14 +40,9 @@ export function resolveStackElementValue(
   return ok(resolvedBinding);
 }
 
-// Alias para compatibilidad hacia atrás
 export const resolveValue = resolveStackElementValue;
 
-/**
- * Ejecuta una operación aritmética binaria (+, -, *, /).
- * Extrae dos operandos de la pila, verifica que ambos sean numéricos
- * y apila el resultado numérico correspondiente.
- */
+// Operaciones aritméticas binarias sobre la pila
 function evaluateArithmeticOperation(
   operator: ArithmeticOp,
   evaluationStack: Stack<StackElement>,
@@ -86,7 +64,7 @@ function evaluateArithmeticOperation(
   const rightRuntimeValue = rightResolutionResult.value;
   const leftRuntimeValue = leftResolutionResult.value;
 
-  // Chequeo dinámico de tipos estricto
+  // Validación estricta de tipos numéricos
   if (leftRuntimeValue.kind !== 'number') {
     return err(EvaluatorError.typeMismatch(operator, 'number', leftRuntimeValue.kind));
   }
@@ -118,11 +96,7 @@ function evaluateArithmeticOperation(
   return ok(undefined);
 }
 
-/**
- * Ejecuta una operación de comparación (==, !=, <, >, <=, >=).
- * Para <, >, <=, >= requiere que ambos operandos sean numéricos.
- * Para == y != permite comparar valores del mismo tipo.
- */
+// Comparaciones lógicas y relacionales
 function evaluateComparisonOperation(
   operator: ComparisonOp,
   evaluationStack: Stack<StackElement>,
@@ -147,7 +121,6 @@ function evaluateComparisonOperation(
   let evaluatedBoolean: boolean;
 
   if (operator === '==' || operator === '!=') {
-    // Si los tipos no coinciden, reportamos error de tipo para reforzar chequeo estricto
     if (leftRuntimeValue.kind !== rightRuntimeValue.kind) {
       return err(
         EvaluatorError.typeMismatch(
@@ -160,7 +133,6 @@ function evaluateComparisonOperation(
     const areValuesEqual = leftRuntimeValue.value === rightRuntimeValue.value;
     evaluatedBoolean = operator === '==' ? areValuesEqual : !areValuesEqual;
   } else {
-    // Relacionales: <, >, <=, >=
     if (leftRuntimeValue.kind !== 'number') {
       return err(EvaluatorError.typeMismatch(operator, 'number', leftRuntimeValue.kind));
     }
@@ -189,9 +161,7 @@ function evaluateComparisonOperation(
   return ok(undefined);
 }
 
-/**
- * Ejecuta operaciones booleanas explícitas (and, or, not).
- */
+// Operadores booleanos explícitos (and, or, not)
 function evaluateBooleanOperation(
   operator: BooleanOp,
   evaluationStack: Stack<StackElement>,
@@ -214,7 +184,6 @@ function evaluateBooleanOperation(
     return ok(undefined);
   }
 
-  // and, or (binarios)
   if (evaluationStack.size() < 2) {
     return err(EvaluatorError.stackUnderflow(operator, 2, evaluationStack.size()));
   }
@@ -248,13 +217,7 @@ function evaluateBooleanOperation(
   return ok(undefined);
 }
 
-/**
- * Ejecuta la asignación postfija de variables (operador '=').
- * Sintaxis esperada:
- *   base 10 =
- *   subtotal 5 2 + =
- * En la pila, el tope es el valor asignado y el elemento anterior es la referencia destino.
- */
+// Asignación de variables en postfijo: <id> <valor> =
 function evaluateAssignmentOperation(
   evaluationStack: Stack<StackElement>,
   symbolEnvironment: Environment
@@ -263,9 +226,7 @@ function evaluateAssignmentOperation(
     return err(EvaluatorError.stackUnderflow('=', 2, evaluationStack.size()));
   }
 
-  // Extraer valor a asignar (tope / derecho)
   const valueElement = evaluationStack.pop()!;
-  // Extraer destino (anterior / izquierdo)
   const targetElement = evaluationStack.pop()!;
 
   if (targetElement.kind !== 'ref') {
@@ -287,10 +248,7 @@ function evaluateAssignmentOperation(
   );
 }
 
-/**
- * Evalúa un único token sobre la pila y el entorno proporcionados explícitamente.
- * Retorna un Result indicando éxito o error, junto con el entorno activo (que puede cambiar con begin/scope o end/endscope).
- */
+// Procesa un token individual contra la pila y el entorno
 export function evaluateToken(
   token: Token,
   evaluationStack: Stack<StackElement>,
@@ -308,9 +266,7 @@ export function evaluateToken(
     }
 
     case 'IDENTIFIER': {
-      // Se coloca como referencia simbólica mnemotécnica en la pila.
-      // Se resolverá a su valor cuando sea requerida por un operador,
-      // o servirá como destino si le sigue una asignación '='.
+      // Se apila como referencia simbólica para ser evaluada o asignada
       evaluationStack.push({ kind: 'ref', name: token.name });
       return ok({ env: symbolEnvironment });
     }
@@ -431,12 +387,11 @@ export function evaluateToken(
             '  <núm> <núm> < | > | <= | >=  : Comparaciones relacionales',
             '  <bool> <bool> and | or       : Operaciones lógicas booleanas',
             '  <bool> not                   : Negación lógica',
-            '  <id> <expr> =                : Asignación de variables (ej. base 10 =, total 5 2 + =)',
-            '  begin / scope                : Apertura de ámbito local (shadowing)',
-            '  end / endscope               : Cierre de ámbito local y descarte de variables',
-            '  vars / env / symbols         : Listar variables activas y sus niveles de scope',
-            '  stack                        : Inspeccionar el estado de la pila',
-            '  clear                        : Limpiar todos los elementos de la pila',
+            '  <id> <expr> =                : Asignación de variables (ej. x 10 =, total 5 2 + =)',
+            '  begin / end                  : Control de ámbito local (shadowing)',
+            '  vars                         : Listar variables activas y nivel de scope',
+            '  stack                        : Ver el estado de la pila',
+            '  clear                        : Limpiar la pila',
             '  help                         : Mostrar esta ayuda',
             '  exit                         : Salir del REPL'
           ].join('\n');
@@ -451,11 +406,7 @@ export function evaluateToken(
   }
 }
 
-/**
- * Evalúa una línea de texto completa en notación postfija.
- * Pasa de forma explícita las referencias a la pila y a la tabla de símbolos.
- * En caso de error, restaura el estado previo de la pila para prevenir corrupción.
- */
+// Evalúa una línea completa de texto
 export function evaluateLine(
   expressionLine: string,
   evaluationStack: Stack<StackElement>,
@@ -471,7 +422,7 @@ export function evaluateLine(
     return ok({ env: symbolEnvironment });
   }
 
-  // Clon de respaldo de la pila para atomicidad por línea en caso de error
+  // Respaldo de la pila para restaurarla en caso de error en la línea
   const backupEvaluationStack = evaluationStack.clone();
   let activeEnvironment = symbolEnvironment;
   const collectedMessages: string[] = [];
@@ -480,7 +431,6 @@ export function evaluateLine(
   for (const token of tokens) {
     const tokenEvaluationResult = evaluateToken(token, evaluationStack, activeEnvironment);
     if (!tokenEvaluationResult.ok) {
-      // Restauramos la pila para evitar estados inconsistentes
       evaluationStack.clear();
       for (const item of backupEvaluationStack.toArray()) {
         evaluationStack.push(item);
@@ -497,7 +447,6 @@ export function evaluateLine(
     }
   }
 
-  // Inspección del tope de la pila tras evaluar la línea
   let topRuntimeValue: RuntimeValue | undefined = undefined;
   if (!evaluationStack.isEmpty()) {
     const topElement = evaluationStack.peek()!;

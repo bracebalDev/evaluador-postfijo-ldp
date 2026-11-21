@@ -1,9 +1,4 @@
-/**
- * error.ts
- *
- * Jerarquía de errores tipados y estructurados para el evaluador postfijo.
- * Permite capturar fallos en tiempo de ejecución de forma controlada sin abortar el REPL.
- */
+// Jerarquía de errores tipados para el evaluador postfijo.
 
 export type ErrorKind =
   | 'STACK_UNDERFLOW'

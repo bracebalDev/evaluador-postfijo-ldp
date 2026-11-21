@@ -1,14 +1,7 @@
-/**
- * types.ts
- *
- * Definición del sistema de tipos algebraicos (Tagged / Discriminated Unions)
- * para el evaluador postfijo (RPN), tokens, valores en tiempo de ejecución,
- * operadores y resultados funcionales (Result<T, E>).
- */
+// Definición de tipos para tokens, operadores, valores en runtime y Result.
 
 import type { EvaluatorError } from './error.js';
 
-// --- Operadores ---
 export type ArithmeticOp = '+' | '-' | '*' | '/';
 export type ComparisonOp = '==' | '!=' | '<' | '>' | '<=' | '>=';
 export type BooleanOp = 'and' | 'or' | 'not';
@@ -16,9 +9,6 @@ export type AssignmentOp = '=';
 
 export type Operator = ArithmeticOp | ComparisonOp | BooleanOp | AssignmentOp;
 
-// --- Comandos Especiales del REPL / Evaluador ---
-// Incluye comandos del proyecto (begin, end, vars) y variantes mnemotécnicas
-// de alto nivel (scope, endscope, env, symbols) para máxima expresividad.
 export type Command =
   | 'begin'
   | 'end'
@@ -32,8 +22,7 @@ export type Command =
   | 'help'
   | 'exit';
 
-// --- Valores en Tiempo de Ejecución (Tagged Unions) ---
-
+// Valores soportados en la pila durante la ejecución
 export interface NumberValue {
   readonly kind: 'number';
   readonly value: number;
@@ -44,28 +33,16 @@ export interface BooleanValue {
   readonly value: boolean;
 }
 
-/**
- * Representa una referencia simbólica a un identificador mnemotécnico en la pila.
- * Permite sintaxis de asignación postfija directa como: `base 10 =` o `subtotal 5 2 + =`.
- * Si se utiliza en una operación que requiere evaluación, se resuelve en el entorno léxico.
- */
+// Referencia simbólica a una variable antes de ser resuelta o asignada
 export interface VariableRef {
   readonly kind: 'ref';
   readonly name: string;
 }
 
-/**
- * Tipo algebraico compuesto que representa los valores computados válidos.
- */
 export type RuntimeValue = NumberValue | BooleanValue;
-
-/**
- * Elementos que pueden residir en la pila de evaluación.
- */
 export type StackElement = RuntimeValue | VariableRef;
 
-// --- Tokens Léxicos (Tagged Unions) ---
-
+// Tipos de tokens generados por el lexer
 export interface NumberToken {
   readonly kind: 'NUMBER';
   readonly value: number;
@@ -103,8 +80,7 @@ export type Token =
   | OperatorToken
   | CommandToken;
 
-// --- Patrón Result Funcional ---
-
+// Patrón Result para manejo de errores sin excepciones no controladas
 export type Result<T, E = EvaluatorError> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: E };
@@ -117,7 +93,6 @@ export function err<E>(error: E): Result<never, E> {
   return { ok: false, error };
 }
 
-// --- Metadatos de Variables para el Comando 'vars' / 'env' ---
 export interface VariableInfo {
   readonly name: string;
   readonly value: RuntimeValue;
