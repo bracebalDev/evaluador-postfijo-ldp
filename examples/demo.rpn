@@ -1,0 +1,80 @@
+# ====================================================================
+# Demostración del Evaluador Postfijo (RPN) en TypeScript
+# Asignación #1 - Lenguajes de Programación (FACYT - UC 1-2026)
+# ====================================================================
+
+# 1. Operaciones Aritméticas Básicas en RPN
+15 5 +
+20 4 -
+6 7 *
+40 8 /
+
+# 2. Asignación y Uso de Variables
+x 10 =
+y 20 =
+vars
+x y +
+x 5 + 2 *
+
+# 3. Expresiones de Asignación Compuestas (ej. x 5 2 + =)
+total 5 2 + =
+vars
+total
+
+# 4. Comparaciones Lógicas (==, !=, <, >, <=, >=)
+10 10 ==
+10 20 !=
+5 10 <
+25 15 >
+10 10 <=
+7 8 >=
+
+# 5. Operaciones Booleanas Explícitas (and, or, not)
+true false and
+true false or
+true not
+false not
+10 5 > 20 15 > and
+
+# 6. Ámbitos Locales (Scoping) y Sombreado de Variables (Shadowing)
+# Verificamos valor global de x
+x
+# Abrimos un nuevo ámbito local
+begin
+vars
+# Asignamos x en el ámbito local (Shadowing)
+x 99 =
+z 500 =
+vars
+x
+# Abrimos un segundo ámbito anidado
+begin
+x 777 =
+vars
+x
+end
+# Al salir del segundo ámbito, x vuelve a 99
+x
+end
+# Al salir del bloque local, x retoma su valor global (10) y z ya no existe
+x
+vars
+
+# 7. Manejo de Errores Controlados (El programa no aborta)
+# Error de tipos: suma de número con booleano
+5 true +
+# Error aritmético: división por cero
+10 0 /
+# Error de pila: stack underflow (limpiamos pila y solicitamos suma binaria)
+clear
++
+# Error de variable no definida
+variable_inexistente 5 +
+# Error de ámbito: end sin begin activo
+end
+
+# 8. Estado final de la pila y variables
+stack
+vars
+clear
+stack

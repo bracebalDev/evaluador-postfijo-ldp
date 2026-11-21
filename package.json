@@ -1,0 +1,30 @@
+{
+  "name": "evaluador-postfijo-ldp",
+  "version": "1.0.0",
+  "description": "Evaluador Postfijo (Mini-REPL en RPN) en TypeScript con sistema de tipos algebraicos, scoping y shadowing",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test \"test/**/*.test.ts\"",
+    "demo": "tsx src/index.ts examples/demo.rpn"
+  },
+  "keywords": [
+    "rpn",
+    "reverse-polish-notation",
+    "evaluator",
+    "repl",
+    "typescript",
+    "stack-based",
+    "programming-languages"
+  ],
+  "author": "Brayan & Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.7.2"
+  }
+}
