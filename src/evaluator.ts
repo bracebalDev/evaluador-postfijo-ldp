@@ -319,18 +319,15 @@ export function evaluateToken(
 
         case 'end':
         case 'endscope': {
-          try {
-            const parentEnvironment = symbolEnvironment.popChildScope();
-            return ok({
-              env: parentEnvironment,
-              message: `[Scope] Bloque local cerrado. Restaurado a Nivel ${parentEnvironment.depth}.`
-            });
-          } catch (caughtException) {
-            if (caughtException instanceof EvaluatorError) {
-              return err(caughtException);
-            }
-            throw caughtException;
+          const popResult = symbolEnvironment.popChildScope();
+          if (!popResult.ok) {
+            return popResult;
           }
+          const parentEnvironment = popResult.value;
+          return ok({
+            env: parentEnvironment,
+            message: `[Scope] Bloque local cerrado. Restaurado a Nivel ${parentEnvironment.depth}.`
+          });
         }
 
         case 'vars':

@@ -84,6 +84,9 @@ variable_inexistente 5 +
 # Error de ámbito: end sin bloque activo
 end
 
+# Error léxico: token inválido no reconocido
+10 @ +
+
 # 8. Estado final de la pila y variables
 stack
 vars

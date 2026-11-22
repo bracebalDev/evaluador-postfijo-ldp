@@ -22,7 +22,7 @@ La aplicación fue desarrollada para la primera asignación de la materia *Lengu
 - Operadores lógicos explícitos (`and`, `or`, `not`) y comparaciones relacionales (`==`, `!=`, `<`, `>`, `<=`, `>=`).
 - Arquitectura modular con funciones mnemotécnicas para la evaluación de operaciones y el manejo de la tabla de símbolos.
 
-El informe técnico detallado (Parte I de la asignación) se encuentra en [docs/REPORTE_TECNICO.md](docs/REPORTE_TECNICO.md).
+El informe técnico detallado (Parte I de la asignación) se encuentra en [docs/REPORTE_TECNICO.md](docs/REPORTE_TECNICO.md) y su versión en PDF en [docs/REPORTE_TECNICO.pdf](docs/REPORTE_TECNICO.pdf).
 
 ---
 
@@ -46,7 +46,9 @@ npm install
 
 | Comando | Descripción |
 |---|---|
-| `npm start` | Inicia el REPL interactivo en la terminal. |
+| `npm run build` | Compila el proyecto TypeScript (`src/`) a JavaScript en la carpeta `dist/`. |
+| `node dist/index.js` | Ejecuta el REPL usando el código compilado en `dist/`. |
+| `npm start` | Inicia el REPL interactivo en la terminal (vía `tsx`). |
 | `npm test` | Ejecuta las pruebas unitarias automatizadas con `node:test`. |
 | `npm run demo` | Corre el archivo de prueba guiado `examples/demo.rpn`. |
 | `npm run typecheck` | Ejecuta la verificación estática de tipos con `tsc --noEmit`. |
@@ -173,8 +175,8 @@ rpn [0]> exit
 
 ## Pruebas Automatizadas
 
-El proyecto incluye 28 pruebas unitarias usando `node:test` y `node:assert/strict` que verifican:
-- Operaciones aritméticas y manejo de división por cero y stack underflow.
+El proyecto incluye 31 pruebas unitarias usando `node:test` y `node:assert/strict` que verifican:
+- Operaciones aritméticas y manejo de división por cero, stack underflow, tokens inválidos (`SYNTAX_ERROR`) y restauración de pila ante errores.
 - Comparaciones lógicas y operaciones booleanas (`and`, `or`, `not`).
 - Chequeo de tipos en tiempo de ejecución (rechazo de operaciones heterogéneas inválidas).
 - Declaración y evaluación de variables en RPN.

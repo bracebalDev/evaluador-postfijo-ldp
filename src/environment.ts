@@ -1,6 +1,7 @@
 // Tabla de símbolos con soporte para ámbitos anidados y shadowing.
 
-import type { RuntimeValue, VariableInfo } from './types.js';
+import type { RuntimeValue, VariableInfo, Result } from './types.js';
+import { ok, err } from './types.js';
 import { EvaluatorError } from './error.js';
 
 export class Environment {
@@ -31,14 +32,14 @@ export class Environment {
   }
 
   // Cierra el ámbito actual y regresa al padre (usado por end / endscope)
-  popChildScope(): Environment {
+  popChildScope(): Result<Environment, EvaluatorError> {
     if (this.parent === null) {
-      throw EvaluatorError.scopeUnderflow();
+      return err(EvaluatorError.scopeUnderflow());
     }
-    return this.parent;
+    return ok(this.parent);
   }
 
-  popChild(): Environment {
+  popChild(): Result<Environment, EvaluatorError> {
     return this.popChildScope();
   }
 

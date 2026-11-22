@@ -81,11 +81,11 @@ export class Environment {
     return new Environment(this);
   }
 
-  popChildScope(): Environment {
+  popChildScope(): Result<Environment, EvaluatorError> {
     if (this.parent === null) {
-      throw EvaluatorError.scopeUnderflow();
+      return err(EvaluatorError.scopeUnderflow());
     }
-    return this.parent;
+    return ok(this.parent);
   }
 ```
 
@@ -156,9 +156,17 @@ if (rightRuntimeValue.kind !== 'number') {
 
 Si el usuario prueba una instrucción inválida como `5 true +`, el evaluador detecta que el segundo operando no es de tipo `'number'` y devuelve un error descriptivo sin que el programa aborte.
 
-### 2.3. Tipado Estructural frente a Tipado Nominal
+### 2.3. Inferencia de Tipos y Análisis de Flujo de Control
 
-A diferencia de lenguajes como C++ o Java, donde dos tipos son distintos si tienen nombres diferentes, TypeScript utiliza equivalencia estructural (*duck typing*). Dos interfaces con exactamente las mismas propiedades son intercambiables. 
+Según la especificación oficial de TypeScript (*TypeScript Language Specification*, Sección 4.1 y análisis de flujo de control), el compilador infiere tipos automáticamente a partir de inicializadores, valores de retorno y ramificaciones condicionales (*Control Flow Analysis* o CFA), evitando anotaciones redundantes sin perder seguridad estática:
+
+1. **Inferencia por contexto e inicialización**: Al escribir `const ARITHMETIC_OPS = new Set<Operator>(...)` en `src/lexer.ts` o `let calculatedNumber: number;` en `src/evaluator.ts`, TypeScript deduce los tipos exactos y garantiza su inicialización antes de ser leídos (*definite assignment analysis*).
+2. **Estrechamiento de tipos (*Type Narrowing*)**: Cuando verificamos `if (leftRuntimeValue.kind !== 'number') return err(...)`, el analizador de flujo de control descarta `NumberValue` en la rama `true` y reduce `leftRuntimeValue` exclusivamente a `NumberValue` después del guardián, habilitando el acceso seguro a `leftRuntimeValue.value` como `number`.
+3. **Exhaustividad en `switch`**: En `evaluateToken` (`src/evaluator.ts`), al agotar todas las variantes de `token.kind` (`'NUMBER' | 'BOOLEAN' | 'IDENTIFIER' | 'OPERATOR' | 'COMMAND'`), el compilador infiere que no quedan casos sin cubrir.
+
+### 2.4. Tipado Estructural frente a Tipado Nominal
+
+A diferencia de lenguajes como C++ o Java, donde dos tipos son distintos si tienen nombres diferentes, TypeScript utiliza equivalencia estructural (*structural subtyping* / *duck typing*, conforme a la especificación de TypeScript sobre compatibilidad de tipos). Dos interfaces con exactamente las mismas propiedades son intercambiables. 
 
 Para evitar confusiones entre tipos con estructuras similares, el discriminador literal `kind: 'number'` frente a `kind: 'boolean'` garantiza que el compilador no los considere compatibles entre sí.
 
@@ -271,4 +279,9 @@ La construcción de este evaluador postfijo en TypeScript nos permitió comproba
 El modelo de *call-by-sharing* de ECMAScript facilitó la mutación controlada de la pila entre llamadas a subrutinas, mientras que el uso de uniones discriminadas y el patrón `Result` permitió estructurar un código modular, predecible y con un manejo de errores robusto.
 
 ---
-**FACYT — Universidad de Carabobo — Noviembre 2026**
+
+## Referencias
+
+1. **ECMA International.** *ECMA-262: ECMAScript Language Specification* (especificación de semántica en tiempo de ejecución, alcance léxico, *closures*, *call-by-sharing* y gestión de memoria). Disponible en: https://tc39.es/ecma262/
+2. **Microsoft.** *TypeScript Handbook & TypeScript Language Specification* (sistema de tipos estático, *Type Erasure*, *Discriminated Unions*, *Type Narrowing* e inferencia basada en flujo de control). Disponible en: https://www.typescriptlang.org/docs/handbook/
+3. **Node.js Foundation / V8 Team.** *Node.js Documentation & V8 Memory Management* (`node:readline`, `node:test`, modelo generacional de recolección de basura). Disponible en: https://nodejs.org/docs/latest/api/

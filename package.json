@@ -20,7 +20,7 @@
     "stack-based",
     "programming-languages"
   ],
-  "author": "Brayan & Team",
+  "author": "Brayan Ceballos y Andrés Crespo",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.10.1",

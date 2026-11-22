@@ -164,3 +164,38 @@ describe('Evaluador Postfijo - Operadores Booleanos Explícitos (and, or, not)',
     if (res.ok) assert.deepEqual(res.value.topValue, { kind: 'boolean', value: true });
   });
 });
+
+describe('Evaluador Postfijo - Manejo de Errores Léxicos y Consistencia de Pila', () => {
+  it('debe reportar SYNTAX_ERROR ante tokens inválidos (10 @ +)', () => {
+    const stack = new Stack<StackElement>();
+    const env = new Environment();
+
+    const res = evaluateLine('10 @ +', stack, env);
+    assert.equal(res.ok, false);
+    if (!res.ok) {
+      assert.equal(res.error.kind, 'SYNTAX_ERROR');
+    }
+  });
+
+  it('debe reportar SYNTAX_ERROR ante símbolos no soportados (5 $ *)', () => {
+    const stack = new Stack<StackElement>();
+    const env = new Environment();
+
+    const res = evaluateLine('5 $ *', stack, env);
+    assert.equal(res.ok, false);
+    if (!res.ok) {
+      assert.equal(res.error.kind, 'SYNTAX_ERROR');
+    }
+  });
+
+  it('debe restaurar la pila si ocurre un error a mitad de línea', () => {
+    const stack = new Stack<StackElement>();
+    const env = new Environment();
+
+    evaluateLine('42', stack, env);
+    const res = evaluateLine('10 0 /', stack, env);
+    assert.equal(res.ok, false);
+    assert.equal(stack.size(), 1);
+    assert.deepEqual(stack.peek(), { kind: 'number', value: 42 });
+  });
+});
